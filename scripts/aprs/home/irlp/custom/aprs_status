@@ -1,0 +1,114 @@
+#!/bin/sh
+#
+# aprs_status IRLP beacon script
+# V1.0 - 26 Apr 03
+# V2.0 - Re-written from origonal (by VK2XJG?)- ZL1AMW 12 Jun 2005
+#	- Now uses TCP connection to APRS server
+#	- Allows user configuration of icon and server details
+#	- Sends icon as an object
+# v2.1 14 June 2005-ZL1AMW - update from sugestions received, 
+#         added D7 mode, improve README
+# v2.2 25 June 2005-ZL1AMW -  further improvement to README
+#            bugfix for simplex frequency
+# v2.3 26 June 2005 - improved enviro variable loading
+# V2.4 01 July 2005 - fix bug with date format
+# V2.5 05 July 2005 - fix for 3 digit node numbers
+#
+#########################################
+#
+# Make sure we are user repeater!!!
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo This program must be run as user REPEATER!
+  exit 1
+fi
+
+# Make sure we have sourced the environment file
+if [ "$RUN_ENV" != "TRUE" ] ; then
+  . /home/irlp/custom/environment
+fi
+
+# Read in the node specific settings.
+. $CUSTOM/aprs_status.conf
+
+
+# Determine our node ID STNxxxx
+# If the length of the stantionid is 6 (old three digit), it adds a zero
+if [ ${#STATIONID} = "6" ] ; then 
+  CONVERTED_STATIONID="$STATIONID"0
+else
+  CONVERTED_STATIONID="$STATIONID"
+fi
+
+
+NODE_NAME1=`echo $CONVERTED_STATIONID | cut -c 4-7`
+NODE_NAME=IRLP$NODE_NAME1
+
+if [ "$D7" = "Y" ]; then
+    # non D7 format
+    FREQ_TEXT=$FREQ"MHz"
+
+else
+    FREQ_TEXT=$FREQ"MHz, "
+
+fi
+
+
+TIMESTAMP=" *"`date -u +%d%H%M`z
+
+
+# Determine the node status
+if [ ! -f $LOCAL/enable ] ; then
+  NODE_STATUS=": NODE OFFLINE"
+  NODE_STATUS_CHAR=$OFFLINE
+
+elif [ -f $LOCAL/active ] ; then
+  NODE_STATUS=": LINKED TO "`cat $LOCAL/active | tr "stn" "STN" | tr "ref" "REF"`
+  NODE_STATUS_CHAR=$LINKED_TO
+
+else 
+  NODE_STATUS=": LINK CLEAR"
+  NODE_STATUS_CHAR=$LINK_CLEAR
+fi
+
+# If no offset is given, then it is simplex
+if [ "$OFFSET" = "SIMPLEX" ] || [ "$OFFSET" = "" ] ; then
+  OFFSET_LABEL=""
+
+else
+
+  OFFSET_LABEL=$OFFSET" offset "
+
+fi
+
+
+if [ "$D7" = "Y" ] ; then
+    # D7 truncated mode, spell it out in full
+    OFFSET_LABEL=$OFFSET" "
+
+fi
+
+# D7 truncated mode, spell it out in full
+if [ "$D7" = "Y" ]; then
+  PL_LABEL="PL"$PL
+
+else
+  PL_LABEL=" PL tone "$PL
+
+fi
+
+# But if no PL tone is stated, don't say anything
+if [ "$PL" = "" ]; then
+  PL_LABEL=""
+
+fi
+
+
+# make up the object beacon ready to send
+ 
+  DATAFILE=$LOCAL"/aprs_data"
+  BEACON=`echo ">APRS:;"$NODE_NAME$TIMESTAMP$LAT$NODE_STATUS_CHAR$LONG$SYMBOL$FREQ_TEXT$OFFSET_LABEL$PL_LABEL$NODE_STATUS`
+  echo $BEACON > $DATAFILE
+
+# call Pearl script to send the beacon
+
+  $CUSTOM/aprs_status_tx.pl $APRS_SERVER $APRS_PORT $APRS_CALL $APRS_VALIDATION
