@@ -1,0 +1,239 @@
+
+
+
+WiFi on PiRLP
+
+I wanted to enable WiFi as a network choice. We are limited in the
+command-line world, most of the tools are GUI... So here's how I 
+did it. Just follow these easy 197 steps and you will be wireless!
+
+:)
+
+[] represents a step and actually there is about a dozen of them.
+
+[] Back up your entire node! Better yet, clone the SD card before messing with it.
+
+First, verify your WiFi USB device is recognized. As root, type
+
+[] root@stn8287:~# lsusb
+Bus 001 Device 002: ID 0424:9512 Standard Microsystems Corp.
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 003: ID 0424:ec00 Standard Microsystems Corp.
+Bus 001 Device 004: ID 04d8:0300 Microchip Technology, Inc.
+Bus 001 Device 005: ID 05e3:0608 Genesys Logic, Inc. USB-2.0 4-Port HUB
+Bus 001 Device 006: ID 0d8c:000c C-Media Electronics, Inc. Audio Adapter
+Bus 001 Device 007: ID 148f:5370 Ralink Technology, Corp. RT5370 Wireless Adapter
+
+The last entry is the winner. I have a Ralink device RT5370 chipset.
+
+If not shown, you need to try another device, or [] find the chipset driver.
+You should have some success, as Debian Squeeze does have a number of
+WiFi drivers built in. Also vendors are selling WiFi USB dongles known to
+work with a Pi.
+
+then verify the adapter is available  as a network device
+
+[] root@stn8287:~# ifconfig
+eth0      Link encap:Ethernet  HWaddr b8:27:eb:60:37:ba
+          inet addr:10.0.0.131  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:944 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:610 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:120175 (117.3 KiB)  TX bytes:97115 (94.8 KiB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:4 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:4 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:208 (208.0 B)  TX bytes:208 (208.0 B)
+
+wlan0     Link encap:Ethernet  HWaddr 00:0f:54:08:11:ca
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+
+You will notice the wireless is there, but you do not yet have an ip address
+from the router/access point. You need a client to associate with the WiFi 
+access point (usually a router). I use WICD-CURSES so here is how to get that.
+
+First, I ran an update to apt-get
+[] root@stn8287:~# apt-get update
+I saw: 
+Get:1 http://mirrordirector.raspbian.org wheezy InRelease [14.9 kB]
+Get:2 http://archive.raspberrypi.org wheezy InRelease [7,737 B]
+Get:3 http://archive.raspberrypi.org wheezy/main armhf Packages [5,588 B]
+Get:4 http://mirrordirector.raspbian.org wheezy/main armhf Packages [7,414 kB]
+Ign http://archive.raspberrypi.org wheezy/main Translation-en_US
+Ign http://archive.raspberrypi.org wheezy/main Translation-en
+Get:5 http://mirrordirector.raspbian.org wheezy/contrib armhf Packages [23.2 kB]
+Get:6 http://mirrordirector.raspbian.org wheezy/non-free armhf Packages [48.0 kB]
+Get:7 http://mirrordirector.raspbian.org wheezy/rpi armhf Packages [569 B]
+Ign http://mirrordirector.raspbian.org wheezy/contrib Translation-en_US
+Ign http://mirrordirector.raspbian.org wheezy/contrib Translation-en
+Ign http://mirrordirector.raspbian.org wheezy/main Translation-en_US
+Ign http://mirrordirector.raspbian.org wheezy/main Translation-en
+Ign http://mirrordirector.raspbian.org wheezy/non-free Translation-en_US
+Ign http://mirrordirector.raspbian.org wheezy/non-free Translation-en
+Ign http://mirrordirector.raspbian.org wheezy/rpi Translation-en_US
+Ign http://mirrordirector.raspbian.org wheezy/rpi Translation-en
+100% [4 Packages bzip2 0 B]
+It appeared to hang a bit at this point, then continue.
+
+then I saw:
+
+Fetched 7,514 kB in 1min 2s (121 kB/s)
+Reading package lists... Done
+root@stn8287:~#
+
+Now, get the WiFi stuff...
+
+[] root@stn8287:~# apt-get install wicd wicd-curses
+then I saw:
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following extra packages will be installed:
+  gir1.2-glib-2.0 libdbus-glib-1-2 libgirepository-1.0-1 python-dbus python-dbus-dev 
+	python-gi python-gobject python-gobject-2 python-urwid python-wicd
+  rfkill wicd-daemon
+Suggested packages:
+  python-dbus-doc python-dbus-dbg python-gi-cairo python-gobject-2-dbg pm-utils
+The following NEW packages will be installed:
+  gir1.2-glib-2.0 libdbus-glib-1-2 libgirepository-1.0-1 python-dbus python-dbus-dev 
+	python-gi python-gobject python-gobject-2 python-urwid python-wicd
+  rfkill wicd wicd-curses wicd-daemon
+0 upgraded, 14 newly installed, 0 to remove and 126 not upgraded.
+Need to get 830 kB/2,556 kB of archives.
+After this operation, 8,259 kB of additional disk space will be used.
+Do you want to continue [Y/n]?
+
+[] You will see a number of packages it needs to install and update. Answer Y <enter>
+and away we go. 
+
+A blue screen will open saying 
+
+Package configuration...
+
+
+Configuring wicd-daemon
+Users who should be able to run wicd clients should be added to the group "netdev".
+Users to add to the netdev group:
+	[]repeater
+[] hit the spacebar to tag the entry ON so it looks like:
+	[*]repeater
+then <enter>
+
+It took a few minutes to install.
+
+Now to try it.  
+
+[] root@stn8287:~# wicd-curses
+
+a black screen might appear
+"No wireless networks found"
+Or it may show nearby networks already.
+
+on the bottom is a bar of commands. They are simply typed using a CAPITAL LETTER
+so <R> would Refresh, <C> would connect to a network.
+F10 is the OK/Save button.
+
+[] I used <P> to set Preferences. I did have to type in wlan0 on the 
+Wireless Interface line. This should match the adapter name shown in ifconfig
+Note it may be entered already.
+[] I also set these preferences (using the spacebar to tag on/off):
+[X] Always show wired interface
+[X] Always switch to wired connection when available
+and down on the list
+[X] Automatically reconnect on connection loss
+
+Note that once you connect wirelessly, you will lose the wired connection 
+(if you quicken boot time by disabling RJ-45) until you lose wireless, 
+then wired will reconnect. Multiple interfaces are not yet supported.
+*See "NOTE" below about quickening boot time.
+
+Back on the main page you should see a list of one or more visible WiFi networks.
+Arrow Down to the one you want then Arrow Right to configure the network. Once you 
+have entered any security keys and F10 to save, and type C to Connect, you have 
+just been disconnected from the wired connection. You can configure multiple 
+WiFi networks. It does boot and connect to whatever WiFi networks you have 
+configured. Use your favorite tool to determine your new wireless ip and 
+reconnect to prove out your connection status.
+
+[] root@stn8287:~# ifconfig
+eth0      Link encap:Ethernet  HWaddr b8:27:eb:60:37:ba
+          UP BROADCAST MULTICAST  MTU:1500  Metric:1
+          RX packets:8384 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:11379 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:548051 (535.2 KiB)  TX bytes:5896247 (5.6 MiB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:16436  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+wlan0     Link encap:Ethernet  HWaddr 00:0f:54:08:11:ca
+          inet addr:10.0.0.118  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:3376 errors:0 dropped:1 overruns:0 frame:0
+          TX packets:338 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:167588 (163.6 KiB)  TX bytes:135503 (132.3 KiB)
+
+Notice the eth0 interface (wired) has no ip associated. However if you plug in
+the RJ-45 cable, it switches over to wired if you set "[X] Always switch to 
+wired connection when available" described above.
+
+*Note: Normally the Pi turns on the eth0 interface during boot and desperately
+seeks an ip address, Which actually slows boot time signifigantly if not 
+connected. So I turn the wired interface off as far as the Pi is concerned 
+and let wicd-curses manage the wired interface also.Here's how:
+
+
+[] in /etc/network edit the interfaces file, change:
+
+auto lo
+iface lo inet loopback
+
+auto eth0
+allow-hotplug eth0
+iface eth0 inet dhcp
+
+and instead make it read
+
+auto lo
+iface lo inet loopback
+
+#auto eth0
+#allow-hotplug eth0
+#iface eth0 inet dhcp
+
+Note, the "speak ip on boot" script is hard-coded to eth0 which is
+not the WiFi inferface. I edited /home/irlp/custom/rc.irlp
+to change eth0 into wlan0 but it didn't work at boot, (it would if ran in 
+in the command line) so I made a seperate script to read 
+eth0 wlan0 tun0 ip (my external ip address after the VPN tunnel) 
+in that order, but that is another kettle of fish.
+
+[] Finally, open wicd-curses and investigate options in P(references) 
+... up top is advanced. I turned on [X] Use dBm to measure signal strength
+
+Don't hit K(RfKill) or you will cut yourself off if using wireless.
+
+Next suggestion: use OpenVPN to avoid the nasty port forward issue...
+
+[] Enjoy your WiFi!
+
+-Pres W2PW
+
+
+

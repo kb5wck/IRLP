@@ -1,0 +1,94 @@
+apt-get install libax25 libax25-dev ax25-apps ax25-tools
+
+# Disable serial console
+nano /boot/cmdline.txt
+remove: console=ttyAMA0, 115200
+remove: kgdboc=ttyAMA0, 115200
+
+
+nano /etc/inittab
+comment out the following line (should be last line of the file):
+#T0:23:respawn:/sbin/getty -L ttyAMA0 115200 vt100
+
+# Reboot to set changes
+shutdown -r now
+
+# Download and install aprx
+cd /usr/src
+wget http://ham.zmailer.org/oh2mqk/aprx/aprx-2.07.svn542.tar.gz
+tar xvf aprx-2.07.svn542.tar.gz
+cd aprx-2.07.svn542
+./configure 
+make
+make install
+
+# Configure ax25 (MAKE SURE THERE ARE NO BLANK LINES IN THE FILE!)
+nano /etc/ax25/axports
+
+
+# /etc/ax25/axports
+#
+# The format of this file is:
+#
+# name callsign speed paclen window description
+#
+#1      OH2BNS-1        1200    255     2       144.675 MHz (1200  bps)
+#2      OH2BNS-9        38400   255     7       TNOS/Linux  (38400 bps)
+packet     N5YIZ-2     19200      236      2      TNCpi (1200 bps)
+
+
+cp /etc/aprx.conf /etc/aprx.conf.orig
+mkdir /var/log/aprx
+nano /etc/aprx.conf
+
+mycall  N5YIZ-2
+<aprsis>
+server   noam.aprs2.net
+</aprsis>
+<logging>
+pidfile /var/run/aprx.pid
+rflog /var/log/aprx/aprx-rf.log
+aprxlog /var/log/aprx/aprx.log
+</logging>
+<interface>
+ax25-device $mycall
+tx-ok true
+</interface>
+<beacon>
+beaconmode both
+cycle-size 10m
+beacon symbol "I#" lat "2946.53N" lon "09525.30W" comment "N5YIZ I-gate/Digipeater in west Houston"
+</beacon>
+<digipeater>
+transmitter $mycall
+<source>
+source $mycall
+relay-type digipeated
+</source>
+</digipeater>
+
+# script to be run to start aprx and mheard
+nano /etc/tnc_start
+
+#!/bin/bash
+#Create the AX.25 interface
+kissattach /dev/ttyAMA0 packet 44.122.1.59
+#Set some optional parameters
+#700ms txdelay (-t)
+#200ms slottime (-s)
+#persist of 32 (-r)
+#100ms txtail (-l)
+#half-duplex mode (-f)
+kissparms -p packet -t 700 -s 200 -r 32 -l 100 -f n
+#Fire a couple of beacons to remedy known AX25 bug
+beacon packet n5yiz
+beacon packet n5yiz
+#Start the aprx digipeater daemon
+aprx
+#Start the mheardd daemon
+mheardd
+
+chmod +x /etc/tnc_start
+
+nano /etc/rc.local
+add:  /etc/tnc_start

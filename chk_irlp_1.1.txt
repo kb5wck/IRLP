@@ -1,0 +1,66 @@
+#!/bin/bash
+# CHECK_IRLP - custom script to replay the connected nodes id
+# Created by NE1H
+# date - 08/28/01
+# version 0.1b
+# Modified 10/21/03 - WY0X --> Added Reflector Check
+
+# Make sure we are user repeater!!!
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo This program must be run as user REPEATER!
+  exit 1
+fi
+
+# Make sure we have sourced the environment file
+if [ "$RUN_ENV" != "TRUE" ] ; then
+  echo "You must source the environment file first. Do this by running:"
+  echo ". /home/irlp/custom/environment"
+  exit 1
+fi
+
+#if [ "$#" = "0" ] ; then
+#  echo Syntax: check_irlp
+#  exit 1
+#fi
+
+# If node is not enabled...
+if [ ! -f "$LOCAL"/enable ] ; then
+  "$SCRIPT"/wavplay disabled
+  echo Node is not Enabled.
+  exit 1
+fi
+
+
+if [ -f "$LOCAL"/active ]; then
+  CONNECTED=`cat "$LOCAL"/active`
+  echo Your node is already connected to $CONNECTED
+  killall ispeaker >&/dev/null 2>&1
+  killall ispeaker_PCI >&/dev/null 2>&1
+  killall sfswrapper >&/dev/null 2>&1
+  if [ ! -f "$AUDIO"/"$REMOTE".wav ] ; then
+      eval `echo $CONNECTED | awk '//{print "NUMBER="substr($CONNECTED,4,4)}'`
+      eval `echo $NUMBER | awk '//{
+                         print "NUM1="substr($NUMBER,1,1);
+                         print "NUM2="substr($NUMBER,2,1);
+                         print "NUM3="substr($NUMBER,3,1);
+                         print "NUM4="substr($NUMBER,4,1)}'`
+      NODEORREF="nodenum"
+      if [ "$NUM1" = "9" ] ; then
+        NODEORREF="reflector";
+      fi
+      IDFILE="connected $NODEORREF $NUM1 $NUM2 $NUM3 $NUM4"
+      "$SCRIPT"/wavplay $IDFILE
+  else
+      "$SCRIPT"/wavplay connected "$CONNECTED"
+  fi
+  "$SCRIPT"/sfswrapper
+  exit 1
+else
+  killall ispeaker >&/dev/null 2>&1
+  killall ispeaker_PCI >&/dev/null 2>&1
+  killall sfswrapper >&/dev/null 2>&1
+  echo Link off.
+  "$SCRIPT"/wavplay linkoff
+  "$SCRIPT"/sfswrapper
+  exit 1
+fi

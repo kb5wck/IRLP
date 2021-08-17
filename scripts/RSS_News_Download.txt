@@ -1,0 +1,176 @@
+#!/bin/bash
+#################################################################################
+#                                                                               #
+# This script utlises RSS to download the WIA news each week.                   #
+# The script grabs a news file stamped with a date within the last five days.   #
+# (The planned broadcast date, i.e. Sunday, is the date stamped on the file)    #
+# It will download a file, if it's avalible, every time the script runs.        #
+# If no file is found it calls the 'old' download script, which goes to the     #
+# the back up sites.                                                            #
+#                                                                               #
+# The script is expected to run on Saturday, and the news to have been          #
+# published on Friday.                                                          #
+#                                          VK3MEL     July 2016                 #
+#                                                                               #
+#  This script depends on the excelent 'greg' program, an RSS podcatcher.       #  
+#      https://github.com/manolomartinez/greg                                   #
+#                                                                               #
+# Once greg is installed, the wia feed must be added:                           #
+#    < greg add wia http://www.wia-files.com/podcast/wianews.xml  >             #
+#                                                                               #
+#   Program steps:                                                              #
+#      1 greg edit downloadfrom 6 days ago                                      #
+#      2 greg sync                                                              #
+#      3 Count the files                                                        #
+#      4 Panic if there's none, or more than 1                                  #
+#      5 mv the output to the dir and rename                                    #
+#        or if panicking, trigger the old download program.                     #
+#      6 send an email to the admin.                                            #
+#                                                                               #
+# This is expecting to be called from "/home/irlp/custom/custom.crons" with     #
+#  the command:                                                                 #
+#  (/home/irlp/custom/RSS_News_Download > /home/irlp/custom/download.out 2>&1)  #
+#     and an appropriate time and date line, such as: 09 30 * * 6               #
+#                                                                               #
+#   29-July-2016 Added a test and clear of the 'bad download' flag              #
+#                                                                               #
+#################################################################################
+# This script relies on functions in "my-functions.sh".
+# Make sure we are user repeater!!!
+# Make sure we have sourced the environment file
+source /home/irlp/custom/my-functions.sh                
+
+# Make sure TERM is defined
+# NOTE: lynx needs TERM set to vt100 or it will not run. lynx -term=vt100
+#       does not seem to work, so this step is necessary.
+if [ "$TERM" = "" ] || [ "$TERM" = "unknown" ] || [ "$TERM" = "dumb" ]
+then
+   export TERM=vt100
+fi
+
+# Set the variables for this script
+#
+# Setup the email addresses that notifications will be sent too.
+# Use a , between addresses
+EMAIL="xxx@gmail.com, yyy@gmail.com"  
+
+# Names of those emailed
+NAMES="Dave, Mal"      
+
+# Location of the news files for broadcast
+NEWSDIR=$AUDIO/custom/newsfiles         
+
+# nominate the final file name
+LOCAL_FILE="wianews_64.mp3"
+
+# fully qualified out file names
+LOCAL_FILE="$NEWSDIR"/"$LOCAL_FILE"
+
+# Location RSS file gets loaded too 
+POD_DIR="/home/irlp/Podcasts"  
+
+START_TIME=$(date +%H:%M:%S)
+
+writelog2 "Commence news download"
+echo "Hi $NAMES,"
+echo -e "The RSS download was kicked off at $START_TIME.\n"
+
+# Clear the bad_download flag if it was previously set
+# Note: This flag is only set by the 'old' download script
+if [ -f $NEWSDIR/bad_download ] ; then
+  rm -f $NEWSDIR/bad_download
+fi
+
+# Test output directory exists
+if [ ! -d $NEWSDIR ] ; then 
+  echo "This must be the first run - there is no download directory!"
+  echo "Creating download directory. . ."
+  writelog2 "Created download directory."
+  mkdir $NEWSDIR
+fi
+
+# Delete the files from the last run
+rm -f $LOCAL_FILE  $POD_DIR"/"wianews-*.mp3
+
+# get the date, 5 days earlier
+DAYS_AGO=$(date --date="5 days ago" +20%y-%m-%d)
+echo -e "News files with a date set after $DAYS_AGO on the WIA website will be downloaded.\n"
+
+# reset the 'download from' date in greg
+greg edit --downloadfrom $DAYS_AGO wia
+
+# When the test flag is set, we dummy up the download
+if [ "$1" = "test" ] ; then
+   echo -e "Test flag set, so this run is using a dummy download.\n"
+# These set up various test scenarios. 
+   cp $POD_DIR/wia_test $POD_DIR/wianews-2016-07-03.mp3
+   # cp ~/Podcasts/wia_test ~/Podcasts/wianews-2016-07-04.mp3
+   # rm ~/Podcasts/wianews-2016-07-03.mp3
+   # echo "no copy"
+else
+# Actually pull the news
+   greg sync wia
+fi
+
+# Check to see that we got 1 file down
+COUNT=$(ls -d $POD_DIR/wianews-* | wc -l) 
+
+if [ "$COUNT" -eq "1" ] ; then
+
+  # Workout what the downloaded file name is
+  LS_OUT=$(ls -d $POD_DIR/wianews-*)
+  RSS_FILE=$(expr $LS_OUT : '.*\(......................\)')
+  writelog2 "wia news Podcast file exists : " ls $RSS_FILE
+  echo -e "\nThe file $RSS_FILE was downloaded.\n"
+
+  # Copy the RSS file into the final location.
+  cp $POD_DIR/wia*.mp3 $LOCAL_FILE
+
+else
+   if [ "$COUNT" -lt "1" ] ; then
+     echo "The wia news Podcast missing. Trying from the backup site."
+     writelog2 "wia news Podcast missing. Going to back up site." 
+
+   else
+     echo "Multiple wia news Podcasts found. Trying from backup site."
+     writelog2 "Multiple wia news Podcasts found. Going to back up site." 
+   fi
+    mail -s "RSS News Failed! " $EMAIL  < /home/irlp/custom/download.out
+
+# Kick off the 'old' news download script, which goes to the backup site.
+    /home/irlp/custom/news_download-barg wia
+    exit 1    
+fi
+
+# Added this section to capture small downloads.
+# The email message notes it's not a complete miss
+
+minimumsize=4000000           # Flags a problem if the news is smaller than ~4meg
+# minimumsize=9999999999999   # use this to test the file too small function
+actualsize=$(wc -c < "$LOCAL_FILE")
+
+if [ $minimumsize -gt  $actualsize ]; then
+   writelog2 "WIA download failed, file smaller than expected." 
+   echo -e "There's a problem. The file size is under $minimumsize bytes.\n"
+   echo "File $actualsize is too small. Now trying backup site." 
+   mail -s "File too Small $(date)" $EMAIL < /home/irlp/custom/download.out
+
+# Kick off the 'old' news download script, which goes to the backup site.
+   /home/irlp/custom/news_download-barg wia
+    exit 1 
+
+else
+
+# Email notification of success
+
+  END_TIME=$(date +%H:%M:%S)
+  echo -e "News update process completed at $END_TIME.\n"
+  echo -e "That's all for this week. 73's till next time.\n"
+  echo    "Node 6310 signing off."
+
+  mail -s "News Download Completed Successfully on $(date)" $EMAIL < /home/irlp/custom/download.out
+
+  writelog2 "RSS News file update completed."
+
+fi
+

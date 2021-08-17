@@ -1,0 +1,168 @@
+#!/bin/bash
+# set -xv
+#################
+# filename:	APRS Beacon Text Announcement
+#
+# description:	This file will modify the Beacon Text or LT of an aprs
+#		DigiPeater to announce the node and status of the repeater 
+#               IRLP link.  If connected to a Node it sends a beacon text
+#               every 10 minutes to announce the node connected to.  When not
+#               connected will send beacon text every 10 minutes to announce that
+#               Node is available.
+#
+# arguments:	none
+#
+# input files:	/home/irlp/local/active
+#
+# output files:	/home/irlp/custom/aprstx
+#
+# history:
+# 20030322	wa0ojs	original release
+# 20030509      added aux1on and aux1off controls for repeater controller
+
+#
+########################################################################
+#
+# Get Status of IRLP
+#
+#
+
+aprsnode="7070"
+# make sure you leave the L at the end of the lat/long........
+aprslatlong="3943.13N/07654.58WL"
+aprsrpt="146.895-"
+aprscom="/dev/ttyS1"
+
+#  echo "M OFF" >${aprscom}
+echo "CONV" >${aprscom}
+
+while [ "1" = "1" ] ;
+    do
+        sleep 10
+
+strip_leading_zero ()
+{
+  val=${1#0}
+  return $val
+}
+
+
+  if [ -f /home/irlp/local/active ] ; then
+
+       if [ -f /home/irlp/custom/aprstxt ] ; then
+     
+#   Looping while connected  
+              
+            if [ "$aprsreid" = "$minchk" ] ; then
+
+              echo "}IRLP${aprsnode}>APRS:!${aprslatlong}`/bin/cat /home/irlp/custom/aprstxt` ON${aprsrpt}  IRLPrptr" >${aprscom}
+
+#              echo "}IRLP${aprsnode}>APRS:!${aprslatlong}`/bin/cat /home/irlp/custom/aprstxt` ON${aprsrpt}  IRLPrptr"
+
+              aprstime=`date +%M`
+              strip_leading_zero $aprstime
+              aprstime=$?      
+              let aprstime+=100
+              aprsreid=aprstime 
+
+              let aprsreid+=10
+
+               if [ "$aprsreid" -ge "160" ] ; then
+                let aprsreid-=60              
+               fi
+               
+#              echo "Sent Continuing Packet"
+ 
+            else
+             minchk=`date +%M`
+             strip_leading_zero $minchk
+             minchk=$?
+             let minchk+=100
+
+            fi
+
+       else
+
+          cp /home/irlp/local/active /home/irlp/custom/aprstxt
+    
+          echo "}IRLP${aprsnode}>APRS:!${aprslatlong}`/bin/cat /home/irlp/custom/aprstxt` ON${aprsrpt}  IRLPrptr" >${aprscom}
+
+            /home/irlp/bin/aux1on
+
+          aprstime=`date +%M`
+           strip_leading_zero $aprstime
+           aprstime=$?
+           let aprstime+=100
+          aprsreid=aprstime
+
+          let aprsreid+=10
+          
+            if [ "$aprsreid" -ge "160" ] ; then
+              let aprsreid-=60
+            fi
+            
+#          echo "Sent Connected Beacon "
+       
+       fi
+
+  else
+
+       if [ -f /home/irlp/custom/aprstxt ] ; then 
+
+          rm /home/irlp/custom/aprstxt
+
+          echo "}IRLP${aprsnode}>APRS:!${aprslatlong}NODE AVAIL${aprsrpt}  IRLPrptr" >${aprscom}
+
+#          echo "Sent NODE AVAILABLE beacon"
+
+           /home/irlp/bin/aux1off
+
+           aprstime=`date +%M`
+           strip_leading_zero $aprstime
+           aprstime=$?
+           let aprstime+=100
+           aprsidle=aprstime
+
+           let aprsidle+=10
+
+            if [ "$aprsidle" -ge "160" ] ; then
+             let aprsidle-=60
+            fi
+              
+  
+  else
+
+              if [ "$aprsidle" = "$minchk" ] ; then
+              echo "}IRLP${aprsnode}>APRS:!${aprslatlong}NODE AVAIL${aprsrpt}   IRLPrptr" >${aprscom}
+
+#              echo "sent Node Avail AGAIN"
+           
+          
+              aprstime=`date +%M`
+              strip_leading_zero $aprstime
+              aprstime=$?
+              let aprstime+=100
+              aprsidle=aprstime
+
+              let aprsidle+=10
+                if [ "$aprsidle" -ge "160" ] ; then
+                 let aprsidle-=60
+                fi
+              
+         
+              fi
+
+           minchk=`date +%M`
+           strip_leading_zero $minchk
+           minchk=$?
+           let minchk+=100
+
+         fi
+       
+fi
+
+
+
+done
+
+

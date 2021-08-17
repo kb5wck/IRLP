@@ -1,0 +1,160 @@
+This is an update to outline how to install Raspbian (Debian 10 Buster) and build a Pi-based IRLP node.
+
+Steps to installing IRLP on a Raspberry PiB, PiB+, Pi2, Pi3, Pi3B+, or Pi4B (NEW)
+Using Debian Buster Lite Image from Rasperrbypi.org
+
+By: David Cameron, VE7LTD
+Date: Monday, July 29, 2019
+
+If you are converting an existing node to a Pi, the first thing to do is back up your existing install using the "backup_for_reinstall" script.
+
+It will create an irlp_backup.tgz file on a USB stick. Please refer to step 2 in at:
+http://www.irlp.net/new-install/Reinstall_from_Backup.pdf
+
+Hardware required:
+ - IRLP Ver 3.0 board
+ - Raspberry PiB, PiB+, Pi2, Pi3, Pi3B+, or Pi4B
+ - A GOOD 5V microUSB (or USB-C for Pi4 and greater) power supply for your Pi.
+   Most issues with the Pi to date have been traced to poor voltage regulation or low voltage.
+ - DB-25 to IDC 26 parallel cable
+ - USB sound card (most all should work, I am using the one listed below)
+ - 4G (minimum) micro-SD card (larger is better, but not required). PiB requires a full size SD card or micro-SD to SD adapter.
+ - USB keyboard
+ - HDMI capable monitor, or an HDMI adapter to another style of monitor
+ - On the Pi4, you will require a micro-HDMI to HDMI cable or adapter
+ - USB sound card - Most use a Syba SD-CM-UAUD, based on Cmedia CM119.
+
+Hardware Modifications required:
+ - Please prepare the IRLP board/parallel cable as shown at: http://www.irlp.net/R_Pi/
+ - If you are using a Pi B+, Pi2, Pi3, Pi3B+, or Pi4B with a 40 pin header, you must cut pins 27 and 28 from the board in order to fit the GPIO cable on. See: http://www.irlp.net/R_Pi/P2010014.JPG  It also shows pin 4 removed - this is not required. It is used as a key for systems ordered from IRLP.
+
+Software Required:
+ - The official Raspbian Buster Lite release from the Raspberry Pi Foundation: http://www.raspberrypi.org/downloads
+ - Follow the directions on the Raspberry Pi Foundation site for creating the card.
+   I use a windows computer and Win32DiskImager. There are options for almost all types of computers and operating systems.
+
+Put the SD card into the Pi, attach the keyboard and monitor and power it up.
+On the first boot, the system will expand the file system on the SD card to maximum size. After it is complete, it will automatically reboot.
+During the reboot, several boot messages will scroll across the screen, and if all is OK, you will be presented with a login prompt.
+The prompt will look like:
+
+Raspbian GNU/Linux 10 raspberrypi tty1
+raspberrypi login:
+
+The default username is:  pi
+The default password is:  raspberry
+
+After login, you will be dropped to a Linux command prompt. The prompt will look like:
+
+pi@raspberrypi:~ $
+
+Perform the following steps to configure the system for IRLP:
+
+1) Configure the software for Your Locale, Language, Timezone, Wifi Country, and Keyboard Layout. You also want to enable SSH, a remote control protocol for your node.
+
+The default settings are for a UK based locale and keyboard setup. You need to set the locale, keyboard, wi-fi country, and timezone for your location. Setting these BEFORE changing any passwords is important, because the passwords could be set with wrong characters because the keymap is different.
+
+At the prompt, type:
+
+sudo  raspi-config
+
+In the raspi-config program, perform the following:
+ - Under (4) Localisation Options, (I1) Change Locale, set the locales to UTF.8 locales for your language/country. I use en_CA.UTF-8 for English, Canada, UTF-8. Remove any locales you are not using, specifically the default UK locale (unless you are in the UK). When asked, set the default locale to your UTF-8 locale.
+ - Under (4) Localisation Options, (I2) Change Timezone, set the timezone.
+ - Under (4) Localisation Options, (I3) Change Keyboard Layout, set the keyboard and country layout. The default is UK layouts, and you have to choose "Other" to see layouts from other countries. I use a Generic 101-key PC, set for English (US).
+   ** If you have issues setting the keyboard, see https://thepihut.com/blogs/raspberry-pi-tutorials/25556740-changing-the-raspberry-pi-keyboard-layout
+   ** If you get some weird characters when you try to set the keyboard, I suggest performing a reboot and trying again.
+ - Under (4) Localisation Options, (I4) Change Wi-fi Country, set the country you are in. This will set the proper channels for your wifi adapter. This is applicable for Pi3 and Pi3B+ only.
+   ** Changing the wi-fi Country is only required for Pi3B and newer boards with wifi integrated **
+ - Under (5) Interfacing Options, (P2) SSH, Enable the SSH server.
+ - Under (7) Advanced Options, (A3) Memory Split, set the memory split to 16MB to maximize the amount of RAM available to IRLP.
+ - Choose <Finish> to exit.
+ - If the system does not reboot on its own, type the command:
+ 
+ reboot
+
+2) Set a root user password
+
+As with the first log in, use the user "pi" and the password "raspberry".
+
+It is very important that you do not set a "weak" root password. Depending on how your system is setup, remote systems can log into your node and attempt to guess the password.
+If the password is weak, your system can be easily hacked. Often all the hackers do is then use your system to try to hack others, but sometimes they can use the node as a portal into your network to gather more information.
+
+At a minimum, your password should be 8 characters in length, and contain combinations of numbers, CAPTIAL and lowercase letters, and punctuation. More info can be found on the web for setting effective passwords.
+
+At the prompt, type:
+
+sudo  su  -
+passwd  root
+
+It will ask you to set a password, and to re-enter that password. Before you start, check the CAPS LOCK key ,and NUM LOCK keys. You do not see the characters as they are typed, so it is easy to make a mistake.
+** WRITE THIS PASSWORD DOWN ** - We can not recover it for you.
+** PAY CLOSE ATTENTION TO THE RESPONSE - If it says "password unchanged", run the command again until it says "password updated successfully".
+
+3) Allowing ROOT User to Log In with Password
+
+By default, the root login by typed password is disabled. Because of the number of scripts and instructions available for operating your node, we enable this ability to make it easier to operate your node. As long as the root password you set above is strong, this does not represent any additional security issues.
+
+At the prompt, type:
+
+nano  /etc/ssh/sshd_config
+
+About 25 lines down, there is a line that says:
+
+#PermitRootLogin prohibit-password
+
+Note that this line starts with a "#" which means this line is commented out. You want to remove the "#" and change the line to say:
+
+PermitRootLogin yes
+
+To exit and save, press CTRL-X, then press "y" to say yes, then press ENTER to accept the filename.
+
+Now, use the command
+
+reboot
+
+to reboot the computer once more.
+
+4) Remove the Pi User
+
+On the next boot, login as user root, using the root password set above.
+
+At the prompt, type:
+
+userdel  -r  pi
+
+This will remove the pi user from the system. This is done to prevent someone else remotely logging into your node using the default password.
+** If you get an error about the user has a process in use, make sure this is the first command you perform after a reboot. **
+** You may see an error "userdel: pi mail spool (/var/mail/pi) not found" - This can be ignored.
+
+5) Obtain the IRLP Setup Script
+
+If you are performing a re-install of a node, now is the best time to plug in your USB stick. If the computer reboots, that is OK, just log in as root again, and continue. Your Pi MUST be connected to the Internet through a Ethernet cable to continue. Download the IRLP "get-irlp-files" script, which will carry you through the rest of the install.
+
+At the prompt, type the following three commands, pressing ENTER after each one:
+
+wget  ftp://ftp.irlp.net/get-irlp-files
+chmod  +x  get-irlp-files
+./get-irlp-files
+
+(This process will take several minutes as it performs software update of Raspbian, and configures your Pi for the packages it needs for IRLP to run.
+
+Then progress with your install as usual. All of the commands are the same as a normal node, and the installer automatically picks up the special binary files for the Pi's ARM processor.
+
+Then reboot, and enjoy your new PiRLP node.
+
+6) Perform the After Install Steps
+
+Please follow the "What do you do After the Install" steps at: http://www.irlp.net/new-install/afterinstallv2.pdf
+
+If there are questions, please submit a help ticket via email to: installs@irlp.net
+
+Please include as much information as you can, including:
+ - Node number
+ - Your IP address
+   (obtained with the command  telnet  irlp.net  10000)
+ - Your root password
+ - Detailed description of what step of the process you are having trouble with
+
+David Cameron
+VE7LTD

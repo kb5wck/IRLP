@@ -1,0 +1,178 @@
+#!/bin/bash
+
+source /home/irlp/custom/my-functions.sh                # This script relies on functions in "my-functions.sh".
+
+############### These lines are all in the my-functions script. So can be dropped here.
+# Make sure we are user repeater!!!
+
+# if [ `/usr/bin/whoami` != "repeater" ] ; then
+#  echo This program must be run as user REPEATER!
+#  exit 1
+# fi
+
+# Make sure we have sourced the environment file
+# if [ "$RUN_ENV" != "TRUE" ] ; then
+#  echo "You must source the environment file first. Do this by running:"
+#  echo ". /home/irlp/custom/environment"
+# exit 1
+# fi
+
+# Make sure TERM is defined
+# NOTE: lynx needs TERM set to vt100 or it will not run. lynx -term=vt100
+#       does not seem to work, so this step is necessary.
+if [ "$TERM" = "" ] || [ "$TERM" = "unknown" ] || [ "$TERM" = "dumb" ]
+then
+   export TERM=vt100
+fi
+
+# ------------
+# Set the variables for this script
+#
+
+EMAIL=xxx@gmail.com
+EMAIL2=xxx@gmail.com         # Need to test that this actually works
+
+NEWSDIR=$AUDIO/custom/newsfiles
+
+writelog2 "Commence news download"
+
+if test -z $1 ; then echo "You must specify which news!" ; exit 1 ; fi
+if [ "$2" = "wav" ] ; then CONVERT=YES ; fi
+
+
+
+case "$1" in
+	newsline)
+		REMOTE_FILE[0]="ftp://ftp.arnewsline.org/quincy/News/news.mp3"
+		LOCAL_FILE="news.mp3"
+		;;
+	twiar)
+		REMOTE_FILE[0]="http://www.twiar.org/twiar.mp3"
+		LOCAL_FILE="twiar.mp3"
+		;;
+	wia)
+                REMOTE_FILE[0]="http://www.wiaq.org.au/ftp/wianews_64.mp3"
+                REMOTE_FILE[1]="http://www.wiaq.org.au/ftp/wianews_32.mp3"          
+                REMOTE_FILE[2]="http://www2.vk7ax.id.au/wianews/wianews_32.mp3"
+                REMOTE_FILE[3]="http://www.vk7ax.id.au/wianews/wianews_32.mp3"
+                
+		LOCAL_FILE="wianews_64.mp3"
+		;;
+	viclink)
+		REMOTE_FILE[0]="http://www.vk3hfs.net/mp3/vk3news.mp3"
+		LOCAL_FILE="vk3news.mp3"
+		;;
+	spectrum_tasmania)
+		REMOTE_FILE[0]="http://www.vk7ax.ausport.net/ftp/spectrum_news.mp3"
+		LOCAL_FILE="spectrum_news.mp3"
+		;;
+	arrl)
+		REMOTE_FILE[0]="http://www.arrl.org/arrlletter/audio/aan.rss"
+		LOCAL_FILE="arrl.mp3"
+		
+		REMOTE_FILE[0]=`wget "$REMOTE_FILE[0]" -O - | perl -ne 'print $1 if /<enclosure\surl="(.*?)".*audio.mpeg/'`
+		
+		if [ -z "$REMOTE_FILE[0]" ]; then
+			echo "Error finding ARRL news file from $REMOTE_FILE[0]"
+			exit 1
+		fi
+		;;
+	
+esac	
+	
+WAVFILE=`basename "$LOCAL_FILE" .mp3`.wav
+
+LOCAL_FILE="$NEWSDIR"/"$LOCAL_FILE"
+WAVFILE="$NEWSDIR"/"$WAVFILE"
+
+
+
+if [ ! -d $NEWSDIR ] ; then 
+  echo "This must be the first run - there is no download directory!"
+  echo "Creating download directory. . ."
+  mkdir $NEWSDIR
+fi
+
+
+# We'll loop through the avalible files, just in case one fails 
+for PASS in "${REMOTE_FILE[@]}" 
+do
+# Clear the bad_download flag if it was previously set
+#
+if [ -f $NEWSDIR/bad_download ] ; then
+  rm -f $NEWSDIR/bad_download
+fi
+if [ -f $NEWSDIR/wav_format ] ; then
+  rm -f $NEWSDIR/wav_format
+fi
+
+
+# Delete the files from the last run
+#
+rm -f $LOCAL_FILE $WAVFILE $NEWSDIR/error.log
+
+# Lets get the latest news
+#
+echo "Getting $PASS ... "
+wget $PASS -O $LOCAL_FILE
+#cp ~/audio/custom/newsfiles/wianews_64.tst ~/audio/custom/newsfiles/wianews_64.mp3
+
+# Check all files are present. If not, set the bad_download flag and send error.
+#
+if [ ! -f $LOCAL_FILE ] ; then
+echo "Cannot find $LOCAL_FILE" >> $NEWSDIR/error.log
+touch $NEWSDIR/bad_download
+writelog2 "WIA download failed, file not found: $PASS"
+
+else
+
+### Added this section to capture small downloads.
+# The email message should be adjusted to note it's not a complete miss
+
+minimumsize=4000000           # Flags a problem if the news is smaller than ~4meg
+# minimumsize=9999999999999   # use this to test if the file is too small
+actualsize=$(wc -c <"$LOCAL_FILE")
+if [ $minimumsize -ge  $actualsize ]; then 
+   echo size is under $minimumsize bytes
+   touch $NEWSDIR/bad_download
+writelog2 "WIA download failed, file smaller than expected: $PASS"
+echo "File $actualsize is too small" | mail -s "File too Small" $EMAIL $EMAIL2
+else
+
+###
+
+writelog2 "News download completed: $PASS"
+  ls /home/irlp/audio/custom/newsfiles/wianews_64.mp3 -lsk > tempdetails.txt
+  downloadtime=`date`
+  mail -s "News Download Completed $downloadtime" $EMAIL $EMAIL2 < tempdetails.txt
+# cat tempdetails.txt | mail -s "News Download Completed" $EMAIL $EMAIL2
+  rm tempdetails.txt
+# echo "Good News Mal" | mail -s "News Download Completed OK" $EMAIL $EMAIL2
+# echo "News Downloaded" | mail -s "News Download Completed OK" $EMAIL2
+break
+fi
+
+fi
+
+
+# Convert to WAV format
+if [ "$CONVERT" = "YES" ] ; then
+    echo "Converting $LOCAL_FILE to WAV. . ."
+    mpg123 -w $WAVFILE $LOCAL_FILE
+    touch $NEWSDIR/wav_format
+fi
+
+
+# If there is an error log, e-mail it.
+#
+if [ -f $NEWSDIR/error.log ] ; then
+  echo "Emailing error.log"
+  cat $NEWSDIR/error.log #| mail -s "Cannot find files" $EMAIL $EMAIL2
+  writelog2 "$PASS not downloaded. News error log found. Emails sent"
+#  cat $NEWSDIR/error.log | mail $EMAIL2 -s " Cannot find files"
+fi
+
+done
+
+
+

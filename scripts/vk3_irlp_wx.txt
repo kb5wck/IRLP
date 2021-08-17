@@ -1,0 +1,330 @@
+#!/bin/bash
+#####################################################################
+#                          VK3_IRLP_WX                              #
+#####################################################################
+# An IRLP Weather announcement script for VK. Tailored to Ballarat in VK3.
+# Uses text-to-speech synthesiser to convert weather data to audio transmission.
+# Data fetched from The Australian Bureau of Meteorology on demand.
+#
+#   Original script by Steve Jones - VK8SJ, Katherine NT Aust. (Node 6732 )
+#   Edited heavily for use in Ballarat, on B.A.R.G. node 6310, 
+#      by Malcolm White - VK3MEL, Ballarat, Vic, Aust.
+#
+# Ballarat Amatuer Radio Group : http://www.barg.org.au/irlp.htm
+#
+# Usage:  vk3_irlp_wx <x>                                            
+#       x = 0 - Ballarat               
+#           1 - Bendigo
+#           2 - Stawell
+#           3 - Ararat
+#           4 - Hamilton
+#           5 - Maryborough
+#           6 - Horsham
+#           7 - Castlemaine
+#           8 - Ben Nevis
+#          20 - Mt Emu Creek at Skipton - River level     
+#
+######################################################################
+#
+# Version   Date     Who      What
+#  1.0.0  18/12/09  VK8SJ, Original hack
+#  1.0.1  21/12/09  VK8SJ, Update for time_cron call
+#  1.0.2  01/01/10  VK8SJ, Update code to include Vic River
+#  1.0.3  12/01/10  VK8SJ, Update to add Cullen River
+#  1.0.4  12/06/10  VK8SJ, Update to add Katherine Temp'
+#  1.0.5  18/08/10  VK8SJ, Update for interstate
+#  1.1.0  15/02/11  VK8SJ, Add cyclone check & play (play temp disabled)
+#  1.1.1  21/05/11  VK8SJ, Shift cyclone stuff into cyclone_scan
+#  2.0.0  20/12/14  VK3MEL Grabbed from http://stn6732.ip.irlp.net/scripts/bom.txt
+#                          Also grabbed http://stn6732.ip.irlp.net/scripts/my-functions.sh.txt
+#                          Modified for Ballarat. 
+#			   Cleaned out remaining cyclone stuff.
+#                          Setup functions for fetch, rather than individual routines / location.
+#                          Added comments so I might follow the code later.
+#                          Timed the fetch & processing time. 
+#
+#####################################################################
+#  To do's:
+# If we find the fetch is slow, consider only geting BOM data if it needs to be refreshed. (Say 20 min)
+# Maybe clean up the "my-functions.sh", to lose all the stuff we don't use. 
+#
+#
+######################################################################
+#
+#  We need to source the IRLP env and make sure user is repeater,
+#  also add some custom functions...
+#
+ source /home/irlp/custom/my-functions.sh                # This script relies on functions in "my-functions.sh".
+
+######################################################################
+#  Script Variables
+#
+Workdir=$CUSTOM"/wx"                                               # Scratch file location
+TTSengine="festival"                                               # set to command for TTS engine
+                                                                   # either swift or festival (BARG uses festival)
+#
+declare -a slot                                                    # array for column nos in dump data
+#
+# Web-Pages from the BOM Site for function resolution.
+#
+Webpage1="ftp2.bom.gov.au/anon/gen/fwo/IDV60154.html"		   # Vic river levels
+Webpage2="http://www.bom.gov.au/vic/observations/vicall.shtml"     # Vic weather obs.
+# Webpage52="www.bom.gov.au/nsw/observations/nswall.shtml"
+#
+# Finding the right page for river levels is a pain. In the file name the 3rd character indicates the state.
+# Then it's a matter of hunting through the site for the right one.
+# In the case of Vic Rivers, IDV60154 seems to be the "latest", all state rivers file. 
+# Use ftp://ftp2.bom.gov.au/anon/gen/fwo/ to browse the BOM site
+#
+######################################################################
+#  Local functions here..
+#
+# Pulls individual elements out of the BOM data. 
+# grep finds the appropriate row. Not sure how we'd go if more than one row matches
+# Multi-word locations require the offset variable to be set.
+
+function getdata () {
+
+echo "func getdata - " $Location 
+   rec_day=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[1]}+$offset)) '{print($n)}'`
+  rec_time=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[2]}+$offset)) '{print($n)}'` 
+ rec_level=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[3]}+$offset)) '{print($n)}'`
+   rec_dir=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[4]}+$offset)) '{print($n)}'`
+rec_extra1=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[5]}+$offset)) '{print($n)}'`
+rec_extra2=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[6]}+$offset)) '{print($n)}'`
+rec_extra3=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[7]}+$offset)) '{print($n)}'`
+rec_extra4=`grep "$Location" $Workdir/wx_dump | awk -v n=$((${slot[8]}+$offset)) '{print($n)}'`
+
+case $rec_day in                                             # Expand the abreviated day
+   Mon)   rec_day="Monday" ;;                                # Used by the River Level routine
+   Tue)   rec_day="Tuesday" ;;
+   Wed)   rec_day="Wednesday" ;;
+   Thu)   rec_day="Thursday" ;;
+   Fri)   rec_day="Friday" ;;
+   Sat)   rec_day="Saturday" ;;
+   Sun)   rec_day="Sunday" ;;
+esac
+ 
+checkprint                                                   # diagnostic print of collected data
+
+}
+#
+#  No data from the website, sensor down etc..
+function nothing () {
+echo "No data is on file at the bureau for "$Location"." >> $Outtext
+writelog2 $Location" - No data received."
+}
+
+function checkprint () {                                     # Debug aid only - prints collected data
+echo "----------------------------"                          # Useful when a location isn't working.
+echo
+echo "Check print of data received..."
+echo
+echo "Day    - "$rec_day
+echo "Time   - "$rec_time
+echo "Level  - "$rec_level
+echo "Dir    - "$rec_dir
+echo "Extra1 - "$rec_extra1
+echo "Extra2 - "$rec_extra2
+echo "Extra3 - "$rec_extra3
+echo "Extra4 - "$rec_extra4
+echo "----------------------------"
+
+}
+
+######################################################################
+# Gets river level data
+function river_level () {
+    fetchStart=$(date +%s)                                   # note what time we start processing
+    echo "river_level - "$Location                           # console message
+    Outtext=$Workdir"/WX_Workfile.txt" ; rm -f $Outtext      # set working text file, and remove previous instance
+
+                                                             # Grab data from BOM, dump into file.
+    lynx -dump -dont_wrap_pre -width 120 $Webpage1 > $Workdir/wx_dump || dummyspit 7 1
+
+    slot=([1]=3 [2]=2 [3]=4 [4]=5 [5]=6 [6]=7)               # define the elements we grab
+    getdata                                                 
+    if [ -z "$rec_time" ] ; then			     # check if there's any data
+      nothing
+    else
+      echo -n "At "$rec_time" on "$rec_day > $Outtext        # build up the announcement
+      echo -n ", the water level at "$Location_label" was " >> $Outtext
+      echo -n $rec_level" meters, and was "$rec_dir". "     >> $Outtext
+      echo " "
+      writelog2 $Location" - "$rec_level"m, "$rec_dir        # Log that we ran this routine
+    fi
+
+      fetchEnd=$(date +%s)                                   # note what time we finished processing
+      fetchTook=$(($fetchEnd-$fetchStart))                   # calulate fetch and process elapsed time
+      writelog2 $Location" Fetched & processed in "$fetchTook" seconds. "
+
+    cat $Outtext					     # display what we've built on the screen
+    sendvoice $Outtext ;                                     # announce the report. (TX)
+      echo " "
+}
+
+######################################################################
+# Gets weather observations
+function full_obs () {
+    fetchStart=$(date +%s)                                   # note what time we start processing
+
+    Outtext=$Workdir"/WX_Workfile.txt" ; rm -f $Outtext      # set working file, and remove previous run
+                                                             # Fetch data from BOM
+    lynx -dump -dont_wrap_pre -width 120 $Webpage2 > $Workdir/wx_dump || dummyspit 7 1
+                                                              
+    slot=([1]=6 [2]=2 [3]=3 [4]=8 [5]=9 [6]=10 [7]=13 [8]=14) # Establish the elements we'll grab in an array
+
+    getdata                                                  # Routine to parse the row of BOM data just fetched
+
+    if [ -z "$rec_time" ] ; then                             # Check that we have data to work with
+      echo "No temperature data was received from the bureau." > $Outtext
+      writelog2 $Location_label" Full Obs - Invalid data received."  # No data, so write to log and exit
+     else
+                                                             # Data is good, so build the text file
+      echo    $Location_label" detailed weather report. " > $Outtext
+      echo -n "At " >> $Outtext
+                                                             # date and time are in $rec_time. Only use the time
+      echo -n ${rec_time:3:7}", the temperature was "$rec_level >> $Outtext 
+      echo -n " degrees, at " >> $Outtext
+      echo    $rec_day" percent humidity. " >> $Outtext  
+      echo -n "The wind was " >> $Outtext
+
+      case $rec_dir in                                       # convert abreviations into full words
+        CALM) echo -n "calm.  "              >> $Outtext ;;
+        N)    echo -n "North at "            >> $Outtext ;;
+        NNE)  echo -n "North North East at " >> $Outtext ;;
+        NE)   echo -n "North East at "       >> $Outtext ;;
+        ENE)  echo -n "East North East at "  >> $Outtext ;;
+        E)    echo -n "East at"              >> $Outtext ;;
+        ESE)  echo -n "East South East at "  >> $Outtext ;;
+        SE)   echo -n "South East at "       >> $Outtext ;;
+        SSE)  echo -n "South South East at " >> $Outtext ;;
+        S)    echo -n "South at "            >> $Outtext ;;
+        SSW)  echo -n "South south west at " >> $Outtext ;;
+        SW)   echo -n "South west at "       >> $Outtext ;;
+        WSW)  echo -n "West south west at "  >> $Outtext ;;
+        W)    echo -n "West at "             >> $Outtext ;;
+        WNW)  echo -n "West north west at "  >> $Outtext ;;
+        NW)   echo -n "North west at "       >> $Outtext ;;
+        NNW)  echo -n "North north west at " >> $Outtext ;;
+      esac
+
+      if [ $rec_dir != "CALM" ] ; then
+         echo -n $rec_extra1" kelometers an hour, gusting to " >> $Outtext
+         echo $rec_extra2" kelometers an hour.  " >> $Outtext # mis-spelling improves pronuciation. 
+       else
+         echo "calm. " >> $Outtext
+      fi
+
+      echo -n "The pressure was "$rec_extra3" hecktopasckals," >> $Outtext 
+
+      if [ "$rec_extra4" != "0.0" ] ; then         # Check for rain fall
+         echo -n " and there has been "$rec_extra4" millimeters of rain since 9am. " >> $Outtext
+      else
+         echo -n " and no rainfall has been recorded. " >>$Outtext
+      fi
+
+      echo "  " >> $Outtext                 
+      fetchEnd=$(date +%s)                         # note what time we finished processing
+      fetchTook=$(($fetchEnd-$fetchStart))         # calulate fetch and process elapsed time
+      cat $Outtext                                 # write what we'll say to screen. (Diag puroses only)
+      echo " "                                             
+ 
+     sendvoice $Outtext                            # sendvoice is in my_functions.sh
+    fi;
+
+                                                   # writelog2 is in my_functions.sh
+      writelog2 $Location" Full Obs Report - "$rec_level"'C. @ "${rec_time:3:7}
+      writelog2 $Location" Fetched & processed in "$fetchTook" seconds. "
+
+      fetchEnd=$(date +%s)                         # note what time we finished processing
+      fetchTook=$(($fetchEnd-$fetchStart))         # calulate fetch and process elapsed time
+      echo "Time to process and read was "$fetchTook  # Write elapsed time to screen. (Diag only)
+      echo " "
+}
+
+
+#
+#  End Local Functions
+######################################################################
+#
+clear
+export TERM=vt100                                  # Fix for lynx with a dumb terminal
+
+# If rubbish passed to us, die
+if [ "$#" = "0" ] ; then                           # Must have 1 char passed
+   dummyspit 7 2                                   # dummyspit is the error handling routine in my_functions.sh
+fi
+writelog2 "Met Bureau script active -("$1")"       # log that we were here
+
+if [ ! -f $LOCAL/enable ] || [ -f $LOCAL/active ] ; then # check node is enabled, and is not active.
+   dummyspit 7 3
+fi
+echo " Processing request.."
+sendtone                                           # Audio announce an "Ack cmd received"
+
+#
+######## Let's go.. #################################################
+#
+case $1 in
+
+0)     Location="Ballarat"                         # Must match the row we want from BOM
+       Location_label=$Location                    # Label, if location is not what we want announced 
+                                                   # Usefull if Festival's pronunciation is wierd.
+       offset=0                                    # number of extra elements in $Location 
+                                                   # i.e. "Ben Nevis" is 2 words, so offset needs to be 1
+       full_obs     ;;                             # Routine to run. (full_obs for weather)
+
+1)     Location="Bendigo"
+       Location_label=$Location
+       offset=0
+       full_obs     ;;
+
+2)     Location="Stawell"
+       Location_label=$Location
+       offset=0
+       full_obs     ;;
+
+3)     Location="Ararat"
+       Location_label=$Location
+       offset=0
+       full_obs     ;;
+
+4)     Location="Hamilton"
+       Location_label=$Location
+       offset=0
+       full_obs     ;;
+
+5)     Location="Maryborough"
+       Location_label=$Location
+       offset=0
+       full_obs     ;;
+
+6)     Location="Horsham"
+       Location_label=$Location
+       offset=1
+       full_obs     ;;
+
+7)     Location="Castlemaine"
+       Location_label=$Location
+       offset=0
+       full_obs     ;;
+
+8)     Location="Ben Nevis"
+       Location_label=$Location
+       offset=1
+       full_obs     ;;
+
+20)    Location="Mt Emu Ck at Skipton"             # Must match the row we want from BOM
+       Location_label="Mt Emu Creek at Skipton"    # Label, if location is not what we want announced 
+                                                   # Usefull if Festival's pronunciation is wierd.
+       offset=4                                    # number of extra elements in $Location 
+                                                   # i.e. "Ben Nevis" is 2 words, so offset needs to be 1
+       river_level  ;;                             # Routine to run. (Note: Only handles one BOM file. )
+
+*)     dummyspit 7 4 ;;                            # no valid location selected, invoke error handling
+
+esac
+
+exit 0
+

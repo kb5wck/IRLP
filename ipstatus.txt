@@ -1,0 +1,39 @@
+#!/bin/bash
+
+#
+# ipstatus - Ver 1.0 by KP4TR (Ramon Gonzalez)
+# March 10, 2013
+#
+# Requires installation of package called "festival"
+# Install package festival as root: apt-get install festival
+#
+
+. /home/irlp/custom/environment
+
+FESTIVAL=$(dpkg-query -W festival 2>&1)
+if [[ $FESTIVAL = "dpkg-query: no packages found matching festival" ]] ; then
+  echo Package festival is required. Install package festival as root: apt-get install festival
+  exit 1
+fi
+
+LOCALIP=$(/sbin/ifconfig eth0 | grep "inet addr:" | cut -d":" -f2 | cut -d" " -f1)
+PUBLICIP=$(/usr/bin/curl -s http://ifconfig.me | cut -d" " -f1)
+
+"$BIN"/forcekey
+
+if [ "$1" = "localip" ]; then
+        echo "local eye pee is $LOCALIP" | festival --tts
+fi
+
+if [ "$1" = "publicip" ]; then
+        echo "public eye pee is $PUBLICIP" | festival --tts
+fi
+
+if [ "$1" = "" ]; then
+        echo "local eye pee is $LOCALIP" | festival --tts
+        echo "public eye pee is $PUBLICIP" | festival --tts
+fi
+
+"$BIN"/forceunkey
+
+exit 0
