@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#
+#
+# WB8ODF - Dave Parks (dave@yahoo.com - Node: 8139)
+#
+#
+#
+# reftimeout.wb8odf will change the timeout value to connect to a reflector
+# to "0" which is NEVER and needs a manual disconnect
+#
+#
+# Ver:		1.0
+#
+# Written:	06/05/2012
+# By:		Dave Parks
+#
+# Last Updated:	06/30/2013
+# By:		Dave Parks
+#
+#
+#
+#
+
+
+
+. /home/irlp/custom/environment
+
+
+REFNUM0=`echo "$1" | sed 's/....$//g'`
+REFNUM1=`echo $1 | sed 's/SSS//g' | sed 's/SPS//g' | sed 's/SPP//g'`
+
+
+if [ "$REFNUM0" = "SSS" ]
+then
+export REFLECT_TIMEOUT_VALUE=0
+elif [ "$REFNUM0" = "SPS" ]
+then
+export REFLECT_TIMEOUT_VALUE=4200
+elif [ "$REFNUM0" = "SPP" ]
+then
+export REFLECT_TIMEOUT_VALUE=1200
+fi
+
+
+
+"$SCRIPT"/end ; sleep 2 ; "$SCRIPT"/connect_to_reflector ref"$REFNUM1"
+
+
+export REFLECT_TIMEOUT_VALUE=1200
+
+exit 0

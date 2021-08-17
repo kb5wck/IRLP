@@ -1,0 +1,47 @@
+#! /bin/bash
+
+# W2PW
+# this evaluates the number of adjacent connections
+
+count=0
+
+while [ "$COUNT" -le "6" ]
+
+do
+
+#var=`asterisk -rx "rpt showvars 409848" | awk '/RPT_NUMALINKS=/{print $2}'`
+var=`asterisk -rx "rpt showvars 409848" | grep RPT_NUMALINKS | cut -d "=" -f2`
+ 
+	if [ "$var" -eq "0" ]
+	then
+	echo "Light bees color 0"
+	elif [ "$var" -eq "1" ]
+	then
+	echo "Light bees color 1"
+	elif [ "$var" -eq "2" ]
+	then
+	echo "Light bees color 2"
+	elif [ "$var" -eq "3" ]
+	then
+	echo "Light bees color 3"
+	elif [ "$var" -eq "4" ]
+	then
+	echo "Light bees color 4"
+	elif [ "$var" -eq "5" ]
+	then
+	echo "Light bees color 5"
+	elif [ "$var" -eq "6" ]
+	then
+	echo "Light bees color 6"
+	fi
+
+count=`expr $COUNT + 1`
+
+done
+
+
+sleep 3
+
+fi
+
+done

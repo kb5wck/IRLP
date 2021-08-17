@@ -1,0 +1,198 @@
+#!/bin/bash
+
+
+# Dave Parks (WB8ODF@yahoo.com Node: 8139)
+#
+# Openvpnreset is a program that allows your node to watch for internet
+# connectivity. If you lose your OPENVPN connection this program will reconnect you.
+#
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF THE
+# CUSTOM_DECODE FILE. IF THIS IS YOUR FIRST INSTALL (NOT AN UPDATE) YOU WILL NEED TO HAVE
+# ACCESS TO THE ROOT ACCOUNT TO EDIT THE /ETC/SUDOERS & $CUSTOM/rc.irlp FILES EXPLAINED AT
+# THE BOTTOM OF THE README FILE AND NOTED IN THIS FILE. -- HOPE YOU LIKE IT!!!
+#
+#
+# Written:      04/26/2020
+# By:           Dave Parks (WB8ODF)
+#
+# Last Updated: 04/27/2020
+# By:           Dave Parks (WB8ODF)
+#
+#
+# Version:      2.0
+#
+#
+#
+#
+# Ver 1.0	- Wrote this script for Kevin (VE6KEZ) because his node kept losing
+#		- his connection using Openvpn. This PINGs some IP address out on the
+#		- net and if the PING fails, this script runs "service openvpn restart".
+#		- 
+#		- 
+#		- 
+#		- To start this script at IRLP startup...
+#		- 1: login as root
+#		- 2: cd to /home/irlp/custom
+#		- 3: edit the rc.irlp
+#		- 4: Add these 3 lines to the bottom of the file
+#
+#		/bin/echo "Starting the openvpnreset.wb8odf script... "
+#		/bin/su - -c "$CUSTOM/openvpnreset.wb8odf 111" repeater >&/dev/null 2>&1
+#		/bin/echo "done"
+#
+#
+#		- To start the program from the command line (as user repeater)...
+#		-
+#		- cd $CUSTOM
+#		- ./openvpnreset.wb8odf 111
+#
+#
+#		- To stop the program from the command line (as user repeater)...
+#		-
+#		- cd $CUSTOM
+#		- ./openvpnreset.wb8odf 000
+#
+#
+#		- Here are the lines to add to your custom/custom_decode file (as user repeater)...
+#		- The entry with the 3 000's stops the program and the 111's starts it, The XXX
+#		- is what you edit to add your DTMF tones to use.
+#		-
+#		if [ "$1" = "XXX" ] ; then "$CUSTOM"/openvpnreset.wb8odf 000 ; exit 1 ; fi
+#		if [ "$1" = "XXX" ] ; then "$CUSTOM"/openvpnreset.wb8odf 111 ; exit 1 ; fi
+#
+#
+#
+#
+#
+#
+#
+# Ver 2.0	- Added a quick statement that allows you to use an entry in your $CUSTOM/custom_decode
+#		- file that runs the "service openvpn restart" or run it directly from this secipt.
+#		- I also added a DEFAULT IP address to directly PING the IRLP Openvpn network.
+#
+#
+#
+#
+#
+#
+
+
+
+
+
+##### Start and Stop the program from the custom_decode file or command line (DTMF)
+
+if [ "$1" = "111" ]
+then
+$CUSTOM/openvpnreset.wb8odf &
+exit 0
+elif [ "$1" = "000" ]
+then
+killall openvpnreset.wb8odf
+exit 0
+fi
+
+
+
+###############################################################
+#################   SOURCED  LOCAL  FILES   ###################
+###############################################################
+
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo
+  echo This program must be run as user REPEATER!
+  echo
+  exit 1
+fi
+
+if [ -f /home/irlp/custom/environment ] ; then
+  . /home/irlp/custom/environment
+  else
+  echo
+  echo "Make sure /home/irlp/custom/environment is there"
+  echo
+  exit 1
+fi
+
+
+
+
+
+###############################################################
+#################    Edit Variables Here     ##################
+###############################################################
+
+PINGIP="192.168.168.1"	# The IP or Domain you want to ping on the internet DEFAULT = 192.168.168.1
+PINGTEST="YES"		# Say YES/NO to use the pingtst function or not DEFAULT = "YES"
+PINGTOTAL="0"		# Number to start with on each IP test pass DEFAULT = 0
+CUSTOMDECODE=""		# DTMF Tones if using custom_decode if not use nothing "" (just 2 quotes)
+SLEEPTIME="600"		# Time to sleep between PING checks (in seconds) DEFAULT = 10 minutes
+
+
+
+
+
+
+############################################################
+##############   Openvpn reset functions   #################
+############################################################
+
+
+# This is the PING test, this will allow you to ping an IP
+# out on the internet to test your connection.
+
+pingtst () {
+if [ "$PINGTEST" = "YES" -o "$PINGTEST" = "yes" ]
+then
+
+        for i in $PINGIP
+        do
+
+        ping $i -c1 >&/dev/null 2>&1
+        PINGCHK1="$?"
+
+        ping $i -c1 >&/dev/null 2>&1
+        PINGCHK2="$?"
+
+        ping $i -c1 >&/dev/null 2>&1
+        PINGCHK3="$?"
+
+        PINGTOTAL=`expr $PINGCHK1 + $PINGCHK2 + $PINGCHK3`
+
+                if [ "$PINGTOTAL" -ge "3" -a "$CUSTOMDECODE" != "" ]
+                then
+		decode $CUSTOMDECODE
+                elif [ "$PINGTOTAL" -ge "3" ]
+		then
+		sudo "/usr/sbin/service openvpn restart"
+                fi
+        shift
+        done
+fi
+}
+
+
+
+
+############################################################
+##############   Openvpn Reset Main Loop   #################
+############################################################
+
+
+while :
+do
+
+pingtst
+
+sleep "$SLEEPTIME"
+
+PINGTOTAL="0"
+
+done
+
+
+exit 0

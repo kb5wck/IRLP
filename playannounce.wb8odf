@@ -1,0 +1,270 @@
+#!/bin/bash 
+
+#
+# PLAYANNOUNCE.wb8odf (Dave Parks wb8odf@yahoo.com Nodes 4812/8139)
+#
+#
+# SUMMARY:	This program will play an announcment between a set of hours and
+#		on the minute and second you set it to play during the set hours.
+#
+#		Ex 1: 7 days play the announcment between 10AM and 8PM and every other hour.
+#		Ex 2: Mon & Wed play between 2AM and 11PM every 4 hours at 21 past the hour.
+#
+#		NOTE:	The first audio wave file should be called $AUDIO/ANN1.wav
+#			The second audio wave file should be called $AUDIO/ANN2.wav
+#			The third audio wave file should be called $AUDIO/ANN3.wav
+#			The forth audio wave file should be called $AUDIO/ANN4.wav
+#
+#
+# THE ANNOUNCEMENTS WILL NOT GO OUT OVER THE REFLECTOR/NODE.
+#                        ---
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF THE
+# CUSTOM_DECODE FILE. IF THIS IS YOUR FIRST INSTALL (NOT AN UPDATE) YOU WILL NEED TO HAVE
+# ACCESS TO THE ROOT ACCOUNT TO EDIT THE /ETC/SUDOERS & $CUSTOM/rc.irlp FILES EXPLAINED AT
+# THE BOTTOM OF THE README FILE AND NOTED IN THIS FILE. -- HOPE YOU LIKE IT!!!
+#
+#
+#
+#
+#
+# VER: 4.0
+#
+# Written: 01/06/2011
+# By: Dave Parks WB8ODF
+#
+# Updated: 03/24/2013
+# By: Dave Parks WB8ODF
+#
+#
+# Version 1.0	Richard K7LWV asked me if I could help out with an annoucement
+#		script that would allow an announcement to be played between
+#		different hours and at a certain minute of that hour.
+#
+#
+# Version 2.0	Cleaned up some coding and added what days of the week you can
+#		play the announcments. I have also added a volume control.  
+#
+#
+# Version 3.0	By request I have added a variable to trigger the announcement
+#		not only by the "DAY" "HOUR" & "MINUTE" but now by the "SECOND".
+#
+#		Note: RUNHRLTEQ = Less Than or Equal To the hour you choose.
+#		      RUNHRGTEQ = Greater Than or Equal To the hour you choose.
+#
+#
+# Version 4.0	By request I have added the ability to have as many announcements
+#		as you would like and they will automatically rotate through the
+#		bunch until it reaches the last (or highest numbered) announcement
+#		and start over at number 1. I have also added the information needed
+#		to add to your custom_decode to force play any of the announcements.
+#		Below is ALL the syntax to add to your custom_decode file. As a last
+#		minute addon I changed the second variable to be turned ON or OFF so
+#		you can use it or not.
+#
+#		Syntax
+#
+#		if [ "$1" = "XXXX" ] ; then "$CUSTOM"/playannounce.wb8odf 000 ; exit 1 ; fi
+#		if [ "$1" = "XXXX" ] ; then "$CUSTOM"/playannounce.wb8odf 111 ; exit 1 ; fi
+#
+#		if [ "$1" = "XXXX" ] ; then "$CUSTOM"/playannounce.wb8odf 1 ; exit 1 ; fi
+#		if [ "$1" = "XXXX" ] ; then "$CUSTOM"/playannounce.wb8odf 2 ; exit 1 ; fi
+#		if [ "$1" = "XXXX" ] ; then "$CUSTOM"/playannounce.wb8odf 3 ; exit 1 ; fi
+#		
+#
+#
+#
+#
+
+
+###################################
+###################################
+###################################
+####    EDIT VARIABLES HERE    ####
+###################################
+###################################
+###################################
+
+VOLUME=".9"				# Volume of the audio (ex: .1 - .9)
+RUNHRLTEQ="24"				# Run before or equal to what hour (ex: 24)
+RUNHRGTEQ="01"				# Run after or equal to what hour (ex: 01)
+RUNMI="14"				# Run at what minute of the hour (ex: 50)
+RUNSEC="OFF"				# Run at what second of the minute (ex: 52) or turn OFF
+EVERYHR="1"				# Number of hours between plays (ex: 1 - 6 DO NOT USE 0)
+MAINSLEEP="20"				# Check the time every how many seconds (ex: 55)
+TALKSLEEP="400"				# How long in seconds to wait if there is a QSO (ex: 600=10 min)
+ANNOUNCENUM="3"				# Total number of announcements you are using (ex: 1-1000)
+PLAYFILE=ANN				# Name of the wav file to be played $AUDIO/ANN(number).wav
+DAYS="Sun Mon Tue Wed Thu Fri Sat"	# Days of the week to play
+
+
+
+
+##### Start and Stop the program from the custom_decode file (DTMF)
+##### Force play the announcements via DTMF
+
+if [ "$1" = "111" ]
+then
+$CUSTOM/playannounce.wb8odf &
+exit 0
+elif [ "$1" = "000" ]
+then
+killall playannounce.wb8odf
+elif [ "$1" != "" ]
+then
+forcekey ; usleep 500000 ; play -v $VOLUME $AUDIO/ANN"$1".wav ; forceunkey
+exit 0
+fi
+
+
+##### Fuctions to check for a number of different states to lock
+
+lockcheck () {
+if [ -f $RUN/*.wav -o ! -z "$(pgrep mpg321)" -o -f "$LOCAL"/aactive ]
+then
+sleep $TALKSLEEP
+lockcheck
+fi
+}
+
+coschk () {
+$BIN/cosstate
+while [ "$?" = "1" ]
+do
+sleep $TALKSLEEP
+coschk
+done
+}
+
+pttchk () {
+$BIN/pttstate
+while [ "$?" = "1" ]
+do
+sleep $TALKSLEEP
+pttchk
+done
+}
+
+
+
+
+##### Calculate if we need to add an hour at start up
+
+PLAYHR=`date +%H`
+CHKMIN=`date +%M`
+if [ "$CHKMIN" -ge "$RUNMI" -a "$CHKMIN" -le "59" ]
+then
+PLAYHR=`expr $PLAYHR + 1`
+fi
+
+
+
+###### Calculate and set up variables to set up and return the one second timer
+
+MIN=`expr $RUNMI - 1`
+TST=`echo $MIN | wc -c`
+if [ "$TST" = "2" ]
+then
+MIN=`echo $MIN | sed 's/^/0/g' | sed 's/$//g'`
+fi
+
+MAINSLEEPHOLD="$MAINSLEEP"
+ANNOUNCEPLAY=1
+
+
+
+
+
+##### Heart of the program runs in while loop
+
+while :
+do
+
+sleep $MAINSLEEP
+
+DAY=`date +%a`
+HR=`date +%H`
+MI=`date +%M`
+
+if [ "$RUNSEC" = "OFF" ]
+then
+SC="OFF"
+else
+SC=`date +%S`
+fi
+	
+
+
+
+##### Change the Hour from OO to 24
+
+if [ "$HR" = "00" ]
+then
+HR="24"
+fi
+
+
+
+
+##### Make sure that PLAYHR does not exceed RUNHRLTEQ
+
+if [ "$PLAYHR" -gt "$RUNHRLTEQ" ]
+then
+PLAYHR="$RUNHRGTEQ"
+fi
+
+
+
+
+##### Start checking every second
+
+if [ "$MI" = "$MIN" -a "$SC" != "OFF" ]
+then
+MAINSLEEP="1"
+fi
+
+
+
+
+
+#################### Check for any locks and make announcment
+
+
+for i in `echo $DAYS`
+do
+
+	if [ "$DAY" = "$i" ]
+	then
+
+		if [ "$HR" -le "$RUNHRLTEQ" -a "$HR" -ge "$RUNHRGTEQ" -a "$HR" -eq "$PLAYHR" -a "$MI" -eq "$RUNMI" -a "$SC" = "$RUNSEC" ]
+		then
+		pttchk
+		coschk
+		lockcheck
+
+			if [ "$ANNOUNCEPLAY" != "$ANNOUNCENUM" ]
+			then
+			forcekey ; usleep 500000 ; play -v $VOLUME $AUDIO/ANN"$ANNOUNCEPLAY".wav ; forceunkey
+			ANNOUNCEPLAY=`expr "$ANNOUNCEPLAY" + 1`
+			PLAYHR=`expr $PLAYHR + $EVERYHR`
+			else
+			forcekey ; usleep 500000 ; play -v $VOLUME $AUDIO/ANN"$ANNOUNCEPLAY".wav ; forceunkey
+			ANNOUNCEPLAY="1"
+			PLAYHR=`expr $PLAYHR + $EVERYHR`
+			fi
+	
+		MAINSLEEP="$MAINSLEEPHOLD"
+		sleep 61
+		fi
+	fi
+
+shift
+done
+
+done
+
+exit 0
+

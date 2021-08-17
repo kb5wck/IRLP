@@ -1,0 +1,302 @@
+#!/bin/bash
+
+#
+#
+# Dave Parks (WB8ODF@yahoo.com Nodes: 4812 & 8139)
+#
+# courtesytone.wb8odf is a program that allows custom courtesy tones
+# that tell users if we are local or connected to an IRLP node and
+# helps everyone from "QUICK KEYING" on reflectors.
+#
+# THESE ARE THE FILES NEEDED TO MAKE COURTESYTONE WORK.
+#
+# courtesytoneon.wb8odf			Starts courtesytone.wb8odf
+# courtesytone.wb8odf			This is the main tone script
+# courtesytoneoff.wb8odf		Shuts off courtesytone.wb8odf
+# e.wav					The Single tone (Local connection)
+# i.wav					The Double tone (IRLP connection)
+# unkey-if-no-net-activity.wb8odf	Checks for network activity
+#
+#
+# THE COURTESY TONES WILL NOT GO OUT OVER THE REFLECTOR/NODE.
+#                         ---
+#
+#
+# Written:	02/28/2011
+# By:		Dave Parks (WB8ODF)
+#
+# Last Updated:	06/14/2011
+# By:		Dave Parks (WB8ODF)
+#
+# Version:	2.0
+#
+#
+# Ver: 1.0	- Wrote this program to give contrasting courtesy tones
+#		- to let the users of a local repeater/simplex node know
+#		- if we are connected to an IRLP node or reflector. This version
+#		- will not tell us which node or reflector we are connected to.
+#		- The idea came from Dave (K9DC) & some hacked code from KK7AV's
+#		- CW/ID scripting (great piece of coding).
+#		- The lockcheck function is there to work with some of my other
+#		- scripts and should not effect any type of VOICE/CW ID you use.
+#
+# Ver: 2.0	- Added more PTT state protection against a courtesy tone being
+#		- sent while any other script/program is holding PTT high. I have
+#		- also added kerchunck protection and added the HANGTIMESLEEP
+#		- variable to help you fine tune your courtesy tone to help your
+#		- node users from QUICK KEYING.
+#		- Added the choice of using wavplay and play. When you use play
+#		- you can control the volume of your courtesy beeps, if you use
+#		- wavplay you are stuck with the volume your wave file is
+#		- recorded at.
+#
+#
+# Here are your entries for the $CUSTOM/custom_decode file.
+#
+# if [ "$1" = "XXX" ] ; then "$CUSTOM"/courtesytoneon.wb8odf ; exit 1 ; fi
+# if [ "$1" = "XXX" ] ; then "$CUSTOM"/courtesytoneoff.wb8odf ; exit 1 ; fi
+#
+#
+#
+# Here is your entry for the /etc/sudoers file (make it the very last line).
+#
+# repeater ALL= NOPASSWD: /sbin/iptables
+#
+#
+#
+#
+
+
+
+
+###############################################################
+#################    Edit Variables Here     ##################
+###############################################################
+
+WAVPROGRAM="PLAY"	# Program to use to play wave file (ex: wavplay / play)
+WHATVOLUME=".1"		# Volume of the courtesy tone if using PLAY (ex: .1 - .99)
+LOCALTONEONOFF="ON"	# Turn the local courtesy tone ON/OFF
+IRLPTONEONOFF="OFF"	# Turn the IRLP courtesy tone ON/OFF
+LOCALSLEEP="3"		# Timing to catch kerchunckers
+HANGTIMESLEEP="0"	# IRLP "Quick Key" protection
+
+
+
+
+
+
+
+###############################################################
+#################   SOURCED  LOCAL  FILES   ###################
+###############################################################
+
+
+########## Make sure we are user repeater!!!
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo
+  echo This program must be run as user REPEATER!
+  echo
+  exit 1
+fi
+
+
+
+########## Make sure that these two files are here and source them
+if [ -f /home/irlp/custom/environment ] ; then
+  . /home/irlp/custom/environment
+  else
+  echo
+  echo "Make sure /home/irlp/custom/environment is there"
+  echo
+  exit 1
+fi
+
+if [ -f "$BIN"/unkey-if-no-net-activity.wb8odf ] ; then
+  . $BIN/unkey-if-no-net-activity.wb8odf
+  else
+  echo
+  echo "Make sure $BIN/unkey-if-no-net-activity.wb8odf is there"
+  echo
+  exit 1
+fi
+
+
+
+
+
+
+###############################################################
+#################   HEART OF THE PROGRAM   ####################
+###############################################################
+
+run_as () {
+if [ -f $LOCAL/active ]
+then
+RUNTYPE="IRLP"
+else
+RUNTYPE="REPEATER"
+fi
+}
+
+echorefcheck () {
+ECHK=`cat $LOCAL/active`
+if [ "$ECHK" = "ref9999" ]
+then
+echorefcheck
+fi
+}
+
+lockcheck () {
+if [ -f $RUN/*.wav -o ! -z "$(pgrep mpg321)" ]
+then
+lockcheck
+fi
+}
+
+
+chkactivity () {
+lockcheck
+net_activity
+if [ "$audio_data_in" == "0" ]; then
+$BIN/forceunkey
+else
+$BIN/forceunkey
+$BIN/key
+fi
+}
+
+
+
+
+
+lockcheck
+$CUSTOM/confirm
+
+
+while :
+do
+
+chkactivity
+echorefcheck
+lockcheck
+sleep "$LOCALSLEEP"
+run_as
+
+
+
+
+
+###############################################################
+###################  REPEATER / SIMPLEX  ######################
+###############################################################
+
+if [ "$RUNTYPE" = "REPEATER" -a "$LOCALTONEONOFF" = "ON" ]
+then
+
+$BIN/pttstate
+while [ "$?" = "1" ]
+do
+$BIN/pttstate
+done
+	$BIN/cosstate
+	if [ "$?" = "1" ]
+	then
+
+		$BIN/cosstate
+		while [ "$?" = "1" ]
+		do
+		$BIN/cosstate
+		done
+				lockcheck
+				if [ "$WAVPROGRAM" = "WAVPLAY" ]
+				then
+				lockcheck
+				touch $RUN/courtesy.wav
+				wavplay "custom/morsecode/e"
+				rm $RUN/courtesy.wav
+				elif [ "$WAVPROGRAM" = "PLAY" ]
+				then
+				lockcheck
+				touch $RUN/courtesy.wav
+				forcekey ;usleep 500000 ; play -v "$WHATVOLUME" "$AUDIO/custom/morsecode/e.wav"
+				rm $RUN/courtesy.wav
+				lockcheck
+				forceunkey
+				fi
+	fi		
+fi
+
+
+
+
+###############################################################
+#####################       IRLP       ########################
+###############################################################
+
+if [ "$RUNTYPE" = "IRLP" -a "$IRLPTONEONOFF" = "ON" ]
+then
+	$BIN/cosstate
+	if [ "$?" = "1" ]
+	then
+		$BIN/cosstate
+		while [ "$?" = "1" ]
+		do
+		$BIN/cosstate
+		done
+				if [ -f $LOCAL/active ]
+				then
+				lockcheck
+					$BIN/pttstate
+					if [ "$?" = "0" ]
+					then
+					sleep $HANGTIMESLEEP
+						if [ "$WAVPROGRAM" = "WAVPLAY" ]
+						then
+						lockcheck
+						touch $RUN/courtesy.wav
+						wavplay "custom/morsecode/i"
+						rm $RUN/courtesy.wav
+						elif [ "$WAVPROGRAM" = "PLAY" ]
+						then
+						lockcheck
+						touch $RUN/courtesy.wav
+						forcekey ;usleep 500000 ; play -v "$WHATVOLUME" "$AUDIO/custom/morsecode/i.wav"
+						rm $RUN/courtesy.wav
+						fi
+					fi
+			fi	
+		chkactivity
+	fi
+
+
+	$BIN/pttstate
+	if [ "$?" = "1" ]
+	then
+		$BIN/pttstate
+		while [ "$?" = "1" ]
+		do
+		$BIN/pttstate
+		done
+				if [ -f $LOCAL/active ]
+				then
+				lockcheck
+					$BIN/cosstate
+					while [ "$?" = "1" ]
+					do
+					$BIN/cosstate
+					done
+					sleep $HANGTIMESLEEP
+						if [ "$WAVPROGRAM" = "WAVPLAY" ]
+						then
+						lockcheck
+						wavplay "custom/morsecode/i"
+						elif [ "$WAVPROGRAM" = "PLAY" ]
+						then
+						lockcheck
+						forcekey ; usleep 500000 ; play -v "$WHATVOLUME" "$AUDIO/custom/morsecode/i.wav"
+						fi
+				fi	
+		chkactivity
+	fi
+fi
+done

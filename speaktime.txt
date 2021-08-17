@@ -1,0 +1,105 @@
+#!/bin/sh
+#
+# v2.2
+# v2.3 -             - Added UTC support
+# v2.4 - 15 May 2003 - Complete rewrite to clean up audio playback routine
+# v2.5 -             - 
+# v2.6 -             -
+# v2.7 -             - Cleanup of prompt packaging
+# v2.8 - 02 Nov 2003 - Added support for Australian prompts
+# v2.9 -             - 
+# v3.0 - 21 Feb 2004 - Added ability to extend PTT keyup delay with -longptt flag
+#
+# V3.1 - Changed to read back 24-hour format if noampm is specified; 24-hour format on the hour is read back as "hundred 
+#(i.e. 22 hundred), and single digit hours are read such as "0 2 hundred", "0 2 30", etc. Also got rid of all the 
+#24-to-12-hour conversions in favor of using the 12-hour parameters in the date command (KB5ELV) 
+#
+###################################################################
+
+# Make sure we are user repeater!!!
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo This program must be run as user REPEATER!
+  exit 1
+fi
+
+. /home/irlp/custom/environment
+
+# Make sure we have sourced the environment file
+if [ "$RUN_ENV" != "TRUE" ] ; then
+  echo "You must source the environment file first. Do this by running:"
+  echo ". /home/irlp/custom/environment"
+  exit 1
+fi
+
+#if [ ! -f $LOCAL/enable ] ; then exit 0 ; fi
+#if [ -f $LOCAL/active ] ; then exit 0 ; fi
+
+#######################
+
+# Determine if we need to play AM and PM
+SUFFIX=`echo $@ | awk '{ if ( $0 ~/-noampm/ ) print "NO" ; else print "YES" }'`
+
+# Set hour/minute variables and whether or not we're UTC
+
+if [ "$1" = "-u" ] ; then
+  UTC="YES"
+if [ "$SUFFIX" = "YES" ] ; then
+HOUR=`/bin/date -u '+%I'`
+MIN=`/bin/date -u '+%M'`
+AMPM=`/bin/date -u '+%P'`
+else
+HOUR=`/bin/date -u '+%H'`
+MIN=`/bin/date -u '+%M'`
+fi
+else
+  UTC="NO"
+if [ "$SUFFIX" = "YES" ] ; then
+HOUR=`/bin/date '+%I'`
+MIN=`/bin/date '+%M'`
+AMPM=`/bin/date '+%P'`
+else
+HOUR=`/bin/date '+%H'`
+MIN=`/bin/date '+%M'`
+fi
+fi
+
+if [ "$SUFFIX" = "YES" ] ; then
+if [ "$HOUR" != [10-12] ] ; then
+export HOUR=`sed 's/^0//' <<< $HOUR`
+fi
+else
+if [ "$MIN" = "00" ] ; then
+export MIN="hundred"
+fi
+fi
+if [ "$HOUR" = "00" ] ; then
+HOUR="0"
+fi
+
+OVERRIDE=`echo $@ | awk '{ if ( $0 ~/-longptt/ ) print "yes" }'`
+
+#Speak the time
+
+# Determine which voice set to use
+VOICE=`echo $@ | awk '{ if ( $0 ~/-aus/ ) print "_aus" ; else print "" }'`
+
+if [ "$OVERRIDE" = "yes" ] ; then export OVERRIDE=no ; fi
+
+if [ "$UTC" = "YES" ] && [ "$SUFFIX" = "YES" ] ; then
+  echo "The Time is" $HOUR $MIN $AMPM "UTC"
+  $CUSTOM/wavplay_nice custom/the_time_is$VOICE custom/$HOUR$VOICE custom/$MIN$VOICE custom/$AMPM$VOICE custom/utc$VOICE
+elif [ "$UTC" = "YES" ] && [ "$SUFFIX" = "NO" ] ; then
+  echo "The Time is" $HOUR $MIN "UTC"
+  $CUSTOM/wavplay_nice custom/the_time_is$VOICE custom/$HOUR$VOICE custom/$MIN$VOICE custom/utc$VOICE
+elif [ "$UTC" = "NO" ] && [ "$SUFFIX" = "NO" ] ; then
+  echo "The Time is" $HOUR $MIN
+  $CUSTOM/wavplay_nice custom/the_time_is$VOICE custom/$HOUR$VOICE custom/$MIN$VOICE 
+else
+  echo "The Time is" $HOUR $MIN $AMPM
+  $CUSTOM/wavplay_nice custom/the_time_is$VOICE custom/$HOUR$VOICE custom/$MIN$VOICE custom/$AMPM$VOICE
+fi
+
+if [ -f $LOCAL/time.wav ]
+then
+rm $LOCAL/time.wav
+fi

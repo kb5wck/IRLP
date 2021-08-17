@@ -1,0 +1,215 @@
+#!/bin/bash
+#
+# Amateur Radio Newsline Feed Script with PTT and TOT Override
+#
+# Written for Dale W9LKI (4049)
+#
+# Version:	4.0
+#
+# Written By:	Dave Parks WB8ODF Node: 8139 (wb8odf@yahoo.com)
+#
+# Date:		Jan 22, 2013
+# Update:	Apr 14, 2016
+# By:		Dave Parks
+#
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF THE
+# CUSTOM_DECODE FILE. IF THIS IS YOUR FIRST INSTALL (NOT AN UPDATE) YOU WILL NEED TO HAVE
+# ACCESS TO THE ROOT ACCOUNT TO EDIT THE /ETC/SUDOERS & $CUSTOM/rc.irlp FILES EXPLAINED AT
+# THE BOTTOM OF THE README FILE AND NOTED IN THIS FILE. -- HOPE YOU LIKE IT!!!
+#
+#
+# Version 1:	Wrote a simple script to download, play and remove the arnewsline news.mp3
+#
+# Version 2:	I was asked to write the script to over ride the PTT Timeout built into
+#		the DTMF binary of the IRLP software and to override the 3 minute TOT
+#		on most repeaters. I borrowed Rob's (KK7AV) PTT Timeout Override script
+#		and modified it a bit to include a 'drop' PTT variable. This allows my
+#		newslinefeed.wb8odf script to drop PTT for a given (variable) amount of
+#		time. (default = .5 second) I also added a Control-C Trap to help clean
+#		up after itself if run from the command line.
+#
+# Version 3:	I added the News Feed Lock file so my voiceid.wb8odf program can ID
+#		every 10 minutes keeping you legal while the 30+ minutes News Feed runs
+#		by adding $RUN/News file to let the ID program know News is running.
+#
+#
+#
+# Version 4:	This version is a total rewrite of the program. It is now totally
+#		function frendly lol I added a function that allows you to keep
+#		the News file all week and only remove and download the new file
+#		on Fridays (one time)
+#
+#
+#
+#
+
+
+
+###############################################################
+#################   SOURCED  LOCAL  FILES   ###################
+###############################################################
+
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo
+  echo This program must be run as user REPEATER!
+  echo
+  exit 1
+fi
+
+if [ -f /home/irlp/custom/environment ] ; then
+  . /home/irlp/custom/environment
+  else
+  echo
+  echo "Make sure /home/irlp/custom/environment is there"
+  echo
+  exit 1
+fi
+
+
+###############################################################
+#################    Edit Variables Here     ##################
+###############################################################
+
+DISCONNECT="73"		# Disconnect string to drop reflector or nodes
+WHATNEWSVOLUME=".6"	# News volume, may be different from CW ID
+WAVNAMECW=callsign.wav	# The wave file in $AUDIO used to CW ID your node
+
+
+
+
+
+
+###############################################################
+##################     Program Funtions    ####################
+###############################################################
+
+
+errors () {
+if [ -f "$LOCAL/active" ] ; then
+forcekey
+$SCRIPT/wavplay error
+forceunkey
+echo
+echo
+echo "You are connected to a node or reflector, please disconnect"
+echo
+echo
+forcekey ; usleep 600000 ; mpg321 -q $AUDIO/custom/ARNL-ERROR.mp3 ; forceunkey
+decode $DISCONNECT
+$CUSTOM/newslinefeed.wb8odf 111
+exit 1
+fi
+}
+
+
+stopall () {
+forceunkey
+killall noptt.wb8odf 2>&1
+killall mpg321 2>&1
+killall wget 2>&1
+rm $LOCAL/News
+	if [ -f $CUSTOM/voiceid.wb8odf ]
+	then
+	killall voiceid.wb8odf 2>&1
+	$CUSTOM/voiceid.wb8odf 111 2>&1
+	forceunkey
+	fi
+#forcekey ; usleep 600000 ; mpg321 -q $AUDIO/custom/END-ARNEWSLINE.mp3 ; forceunkey
+killall newslinefeed.wb8odf 2>&1
+}
+
+
+
+
+downloads () {
+ 
+cd /tmp
+
+# Play Download .mp3
+forcekey ; usleep 600000 ; mpg321 -q $AUDIO/custom/ARNL-DL.mp3 ; forceunkey
+
+
+# Remove the news.mp3 file and $LOCAL/New lock file only if it's Friday
+rm /tmp/www.arnewsline.org/storage/audio/news.mp3  2>&1
+
+# Download the News Line news.mp3 file
+wget -q -r http://www.arnewsline.org/storage/audio/news.mp3
+}
+
+
+
+
+fridays () {
+
+# Change Directory to /tmp
+cd /tmp
+
+touch $LOCAL/News
+
+killall voiceid.wb8odf 2>&1
+$CUSTOM/voiceid.wb8odf &
+
+# Start up the PTT Timeout Override in background
+$CUSTOM/noptt.wb8odf &
+
+
+# Play Download .mp3
+forcekey ; usleep 600000 ; mpg321 -q $AUDIO/custom/ARNL-DL.mp3 ; forceunkey
+
+# Keyup, Sleep .5 second, Play the news.mp3 file, forceunkey
+forcekey ; usleep 500000 ; mpg321 -q /tmp/www.arnewsline.org/storage/audio/news.mp3 ; forceunkey
+
+# Play END-ARNEWSLINE .mp3
+sleep 1
+forcekey ; usleep 500000 ; mpg321 -q --g 26  $AUDIO/custom/END-ARNEWSLINE.mp3 ; forceunkey
+
+# Kill the noptt.wb8odf PTT Override Script addded the script to keep
+# the file until the following Friday then delete this version and
+# download the new News file.
+killall noptt.wb8odf
+
+sleep 1
+
+# Play your CW ID at the end of the news
+if [ -f $AUDIO/"$WAVNAMECW" ]
+then
+forcekey
+usleep 600000 ; play -v $WHATNEWSVOLUME $AUDIO/$WAVNAMECW
+fi
+$CUSTOM/newslinefeed.wb8odf 000
+}
+
+
+
+
+##### Go to arnewsline.org and get the new news.mp3 file
+
+if [ "$1" = "111" ]
+then
+downloads
+
+
+#####  STOP ALL and clean up
+
+elif [ "$1" = "000" ]
+then
+stopall
+
+
+#####  PLAY the stored news.mp3 file
+
+elif [ "$1" = "222" ]
+then
+errors
+fridays
+
+fi
+
+
+
+# Exit the script with code 0
+exit 0

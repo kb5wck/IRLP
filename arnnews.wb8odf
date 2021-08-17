@@ -1,0 +1,91 @@
+
+#!/bin/bash
+#
+# Amateur Radio Newsline Feed Script connects to Reflector 0016
+#
+#
+# Version:      1.0
+#
+# Written By:   Dave Parks WB8ODF Node: 8139 (wb8odf@yahoo.com)
+#
+# Date:         Jun 30, 2020
+# Update:       Jun 30, 2020
+# By:           Dave Parks
+#
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF THE
+# CUSTOM_DECODE FILE. IF THIS IS YOUR FIRST INSTALL (NOT AN UPDATE) YOU WILL NEED TO HAVE
+# ACCESS TO THE ROOT ACCOUNT TO EDIT THE /ETC/SUDOERS & $CUSTOM/rc.irlp FILES EXPLAINED AT
+# THE BOTTOM OF THE README FILE AND NOTED IN THIS FILE. -- HOPE YOU LIKE IT!!!
+#
+#
+# Version 1:    Wrote a simple script to connect to Reflector 0016
+#               and play ARN mp3 feed then disconnect.
+#
+#
+#
+#
+
+
+
+###############################################################
+#################    Edit Variables Here     ##################
+###############################################################
+
+DISCONNECT="73"		# Disconnect string to drop reflector or nodes.
+CONNECTTO="0016"	# Reflector to connect to.
+RETURNTO=""		# node/reflector to reconnect to after news ends
+SLEEP="30"		# Num of seconds before checking for $LOCAL/active
+COUNT="0"		# Start count at (0)
+
+
+
+
+
+
+###############################################################
+##################     Program Funtions    ####################
+###############################################################
+
+if [ -f "$LOCAL/active" ] ; then
+RETURNTO=`cat $LOCAL/active`
+fi
+
+connectto () {
+if [ -f "$LOCAL/active" ] ; then
+rm $LOCAL/active
+decode $DISCONNECT
+decode $CONNECTTO
+else
+decode $CONNECTTO
+fi
+decode $RETURNTO
+}
+
+
+# run the connect to function
+connectto
+
+
+while :
+do
+sleep $SLEEP
+COUNT=`expr $COUNT + 2`
+if [ ! -f "$LOCAL/active" ]
+then
+decode $DISCONNECT
+decode $RETURNTO
+fi
+if [ $COUNT = "21" ]
+then
+rm $LOCAL/active
+exit 0
+fi
+done
+
+
+# Exit the script with code 0
+exit 0

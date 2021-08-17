@@ -1,0 +1,237 @@
+#!/bin/bash
+
+#
+#
+# Dave Parks (WB8ODF@yahoo.com Nodes: 4812 & 8139)
+#
+# fancontrol.wb8odf is a program that allows you to turn your
+# cooling fan on and off with a timer when PTT & COS go low.
+# or the $LOCAL/active is there while connected to a node
+# It used AUXON & AUXOFF so you will need to wire the fan up
+# to AUX2 or AUX3.
+#
+#
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF
+# THE CUSTOM_DECODE FILE.
+#
+#
+#
+#
+#
+# THESE ARE THE FILES NEEDED TO MAKE FANCONTROL WORK.
+#
+# fancontrol.wb8odf	Main program
+#
+#
+#
+#
+# Written:	06/10/2013
+# By:		Dave Parks (WB8ODF)
+#
+# Last Updated:	03/26/2015
+# By:		Dave Parks (WB8ODF)
+#
+#
+#
+# Version:	3.0
+#
+#
+# Ver: 1.0	- I was asked to write a program that simply turns your
+#		- cooling fan on and off and continue running for a
+#		- regulated amount of time after COS & PTT go low (0)
+#		- This program uses AUXON & AUXOFF, you will need to
+#		- wire a relay between the AUX port and your fan. That
+#		- is NOT covered here.
+#
+#
+# Ver: 2.0	- Changed up the COS PTT check to run as one function
+#		- instead of two. Added a Anti kerchunk feature. 
+#
+#
+# Ver: 3.0      - At the request of James VE1JCS I added a function that
+#               - runs the fans while $LOCAL/active is there. This makes
+#               - the program run the fans while connected to a node or
+#               - reflector. The variable "CONNECTED" must be set to YES
+#               - in order for this function to replace COS and PTT check.
+#
+#
+#
+#
+
+
+
+###############################################################
+#################   SOURCED  LOCAL  FILES   ###################
+###############################################################
+
+
+########## Make sure we are user repeater!!!
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo
+  echo This program must be run as user REPEATER!
+  echo
+  exit 1
+fi
+
+
+
+########## Make sure that these files are here and source them
+if [ -f /home/irlp/custom/environment ] ; then
+  . /home/irlp/custom/environment
+  else
+  echo
+  echo "Make sure /home/irlp/custom/environment is there"
+  echo
+  exit 1
+fi
+
+
+
+
+
+###############################################################
+#################    Edit Variables Here     ##################
+###############################################################
+
+SLEEPCHK=7		# Seconds to sleep before checking PTT & COS or $LOCAL/active
+BIGSLEEP=2		# Minutes to sleep while fan is running
+AUXNUM=2		# The AUX number to turn on and off
+KERCHUNK=3		# Anti Kerchunkiing helps stop fan on keyups
+CONNECTED="NO"		# This uses the $LOCAL/active instead of COS/PTT
+
+
+
+
+
+
+##### Start and Stop the program from the custom_decode file (DTMF)
+if [ "$1" = "111" ]
+then
+$CUSTOM/fancontrol.wb8odf &
+exit 0
+elif [ "$1" = "000" ]
+then
+killall fancontrol.wb8odf
+exit 0
+fi
+
+
+
+###############################################################
+###################   PROGRAM  FUNCTIONS  #####################
+###############################################################
+
+
+BIGTIMER=`expr $BIGSLEEP \* 60`
+
+
+chkcosptt () {
+
+$BIN/cosstate
+CHKCOS="$?"
+
+$BIN/pttstate
+CHKPTT="$?"
+
+sleep $KERCHUNK
+
+$BIN/cosstate
+CHKCOS="$?"
+
+$BIN/pttstate
+CHKPTT="$?"
+
+
+if [ "$CHKCOS" = "1" -o "$CHKPTT" = "1" ]
+then
+CHKFAN="ON"
+CHKFAN1="ON"
+$BIN/aux"$AUXNUM"on
+sleep "$SLEEPCHK"
+chkcosptt
+fi
+
+if [ "$CHKFAN1" = "ON" ]
+then
+CHKFAN="OFF"
+CHKFAN1="OFF"
+fi
+
+}
+
+
+connected () {
+if [ -f $LOCAL/active ]
+then 
+sleep $KERCHUNK
+CHKFAN="ON"
+CHKFAN1="ON"
+$BIN/aux"$AUXNUM"on
+sleep "$SLEEPCHK"
+connected
+fi
+
+if [ "$CHKFAN1" = "ON" ]
+then
+CHKFAN="OFF"
+CHKFAN1="OFF"
+fi
+
+}
+
+
+
+
+
+CHKFAN="ON"
+CHKFAN1="OFF"
+
+
+
+
+
+###############################################################
+#################   HEART OF THE PROGRAM   ####################
+###############################################################
+
+
+while :
+do
+
+if [ "$CONNECTED" = "NO" ]
+then
+
+chkcosptt
+
+until [ "$CHKFAN" = "OFF"  -a "$CHKCOS" = "0" -a "$CHKPTT" = "0" ]
+do
+sleep "$SLEEPCHK"
+chkcosptt
+done
+
+else
+
+connected
+
+until [ "$CHKFAN" = "OFF"  -a  "$CHKFAN1" = "OFF" ]
+do
+sleep "$SLEEPCHK"
+connected
+done
+
+
+if [ "$CHKFAN" = "OFF" ]
+then
+CHKFAN="ON"
+sleep "$BIGTIMER"
+$BIN/aux"$AUXNUM"off
+fi
+
+fi
+
+
+done

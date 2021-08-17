@@ -1,0 +1,143 @@
+#!/bin/bash
+
+#
+# wgetarn moves the *news.mp3 files around and then
+# does a wget to AR Newslines or ARRL web sites to 
+# get the latest news file (news.mp3 or arrlnews.mp3).
+# If you need help you can reach me via email: wb8odf@yahoo.com
+#
+#
+#
+# 1). wgetarn moves *news.mp3 *news.old.mp3
+# 2). wgetarn downloads *news.mp3 files
+# 3). wgetarn copies *news.mp3 *news.hold.mp3 (as a backup)
+#
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF THE
+# CUSTOM_DECODE FILE. IF THIS IS YOUR FIRST INSTALL (NOT AN UPDATE) YOU WILL NEED TO HAVE
+# ACCESS TO THE ROOT ACCOUNT TO EDIT THE /ETC/SUDOERS & $CUSTOM/rc.irlp FILES EXPLAINED AT
+# THE BOTTOM OF THE README FILE AND NOTED IN THIS FILE. -- HOPE YOU LIKE IT!!!
+#
+#
+#
+#	VERSION: 1.0
+#
+#	Written: 11/09/2019 By: Dave Parks WB8ODF
+#	Updated: 11/10/2019 by: Dave Parks WB8ODF
+#
+#
+#
+#
+# Ver 1:	I wrote this script in answer to a couple of
+#		people wanting the wget command to access the
+#		*news.mp3 files on both AR Newsline (news.mp3)
+#		and/or ARRL Audio News (arrlnews.mp3).
+#		You can run this program in two ways...
+#
+#		wgetarn (no flags) this will run the program
+#		manually and ask you what News file to get.
+#
+#		-OR-
+#
+#		wgetarn flag (ARN or ARRL) this will allow you
+#		to run the program as a IRLP CRON job, or via
+#		DTMF from the $CUSTOM/custom_decode file.
+# 
+# 
+#		Here are the two entries for the custom_decode
+#		file. Change the XXX to be your DTMF entries.
+#		If you wish to run it as a cron job you will
+#		need to read up on IRLP cron.
+#
+#	if [ "$1" = "XXX" ] ; then "$CUSTOM"/wgetarn ARN ; exit 1 ; fi
+#	if [ "$1" = "XXX" ] ; then "$CUSTOM"/wgetarn ARRL ; exit 1 ; fi
+# 
+# 
+# 
+# 
+
+
+
+clear
+
+### If $1 = "" it asks which files to get & reads the answer
+
+if [ "$1" = "" ]
+then
+echo
+echo -n "Download ARN or ARRL (ARN or ARRL): "
+read answer1
+else
+answer1="$1"
+fi
+
+
+
+### This handels all the AR Newsline Files
+
+if [ "$answer1" = "ARN" -o "$1" = "ARN" -o "$1" = "arn" ]
+then
+echo
+echo "Moving and Down Loading AR Newsline MP3 files..."
+
+echo
+ls -al *news*
+echo
+
+mv news.mp3 news.old.mp3
+
+wget https://www.arnewsline.org/s/news.mp3
+
+cp news.mp3 news.hold.mp3
+chown apache *news*
+chgrp apache *news*
+
+echo
+echo "FINISHED getting AR Newsline MP3 files..."
+echo
+
+ls -al *news*
+
+echo
+exit 0
+fi
+
+### End of AR Newsline portion
+
+
+
+
+### This handels all the ARRL Audio News Files
+
+if [ "$answer1" = "ARRL" -o "$1" = "ARRL" -o "$1" = "arrl" ]
+then
+echo
+echo "Moving and Down Loading ARRL Audio News MP3 files..."
+
+echo
+ls -al *news*
+echo
+
+mv arrlnews.mp3 arrlnews.old.mp3
+
+wget https://www.arrl.org/files/file/News/Audio%20News/AudioNews-Latest.mp3 -O arrlnews.mp3
+
+cp arrlnews.mp3 arrlnews.hold.mp3
+
+echo
+echo "FINISHED getting ARRL Audio News MP3 files..."
+echo
+
+ls -al *news*
+
+echo
+exit 0
+fi
+
+### End of ARRL Audio News portion
+
+
+exit 1

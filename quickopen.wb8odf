@@ -1,0 +1,166 @@
+#!/bin/bash
+
+#
+#
+# WB8ODF - Dave Parks (wb8odf@yahoo.com)
+#
+# 
+#
+#
+# I wrote this program for Mike K4EZ to access his 2 nets.
+#
+# quickopen will watch for times and days of the week then automatically
+# open a link to the net reflector and channel and if you want to go
+# back to a node or reflector after the net is over, that can be set too.
+#
+#
+#
+# NOTICE: NO WARRANTY IS EXPRESSED AS TO THE SUITABILITY OR STABILITY OF THIS PROGRAM
+# AND YOUR LINUX OS. IT MAY BREAK YOUR NODE. I AM AVAILABLE FOR SUPPORT AT THE E-MAIL
+# ADDRESS OR NODE NUMBERS LISTED AT THE TOP OF THIS PAGE. THE INSTALL OF THIS PROGRAM
+# ASSUMES YOU KNOW ENOUGH ABOUT LINUX TO MOVE ABOUT, EDIT FILES AND JUST A LITTLE OF THE
+# CUSTOM_DECODE FILE. IF THIS IS YOUR FIRST INSTALL (NOT AN UPDATE) YOU WILL NEED TO HAVE
+# ACCESS TO THE ROOT ACCOUNT TO EDIT THE /ETC/SUDOERS & $CUSTOM/rc.irlp FILES EXPLAINED AT
+# THE BOTTOM OF THE README AND IN THIS FILE. -- HOPE YOU LIKE IT!!!
+#
+#
+#
+# Ver:		1.0
+#
+# Written:	09/04/2019
+# By:		Dave Parks
+#
+# Last Updated:	09/04/2019
+# By:		Dave Parks
+#
+#
+#
+# 1.0		Wrote a small script for Mike K4EZ to watch for two nets. I left a little bit
+#		code so it can be upgraded HOWEVER, if more is needed I think we should upgrade
+#		to my netopen program.
+#
+#
+#
+#
+#
+# If you do NOT understand any of this please give me a call at
+# node 8139 or email me.... wb8odf@yahoo.com 
+# 
+#
+#
+#
+
+
+
+############################################################
+#################  Edit  Variables Here  ###################
+############################################################
+DISCONNECTNUM=73			# DTMF tones to disconnect	
+REFLECTORNUM=9214			# Ref number to dial into
+
+
+
+
+##### Start and Stop the program from the custom_decode file (DTMF)
+##### Force voiceid DTMF
+
+#if [ "$1" = "111" ]
+#then
+#$CUSTOM/quickopen.wb8odf &
+#exit 0
+if [ "$1" = "000" ]
+then
+decode $DISCONNECTNUM
+killall quickopen.wb8odf >&/dev/null 2>&1
+exit 0
+fi
+
+
+
+
+
+###############################################################
+#################   SOURCED  LOCAL  FILES   ###################
+###############################################################
+
+
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo
+  echo This program must be run as user REPEATER!
+  echo
+  exit 1
+fi
+
+
+if [ -f /home/irlp/custom/environment ] ; then
+  . /home/irlp/custom/environment
+  else
+  echo
+  echo "Make sure /home/irlp/custom/environment is there"
+  echo
+  exit 1
+fi
+
+
+
+
+
+###############################################################
+#######   GET DAY, HR, MIN & DAY NUMBER  (functions)  #########
+###############################################################
+
+
+connectedchk () {
+if [ -f $LOCAL/active ]
+then
+decode "$DISCONNECTNUM" >&/dev/null 2>&1
+fi
+}
+
+
+
+timefunc () {
+DAY=`date +%a`
+HR=`date +%H`
+MN=`date +%M`
+DAYNUM=`date +%u`
+if [ "$HR" = "00" ]
+then
+HR="24"
+fi
+}
+
+
+
+chkactivity () {
+net_activity
+if [ "$audio_data_in" == "0" ]; then
+$BIN/forceunkey
+else
+$BIN/forceunkey
+$BIN/key
+fi
+}
+
+
+
+
+#######################################################
+#################   Main  Script   ####################
+#######################################################
+
+
+timefunc
+
+if [ "$DAY" = "Mon" -a "$1" = "111" -a "$2" = "0" ]
+then
+connectedchk
+decode "$REFLECTORNUM" >&/dev/null 2>&1
+elif [ "$DAY" = "Tue" -a "$1" = "111" -a "$2" = "1" ]
+then
+connectedchk
+decode "$REFLECTORNUM" >&/dev/null 2>&1
+fi
+
+
+exit 0

@@ -1,0 +1,81 @@
+#!/bin/bash
+
+#######################################
+# MODIFICATIONS TO WAVPLAY SCRIPT TO STOP IT KEYING OVER QSO'S.  
+# COSCHECK ONLY WAITS 30 SECONDS, THEN KEYS ANYWAY.
+#######################################
+
+#Plays WAV files with check for COS, key, .5 second delay, unkey
+#This script can take up to four arguments as wav files without the ".wav"
+
+# Make sure we are user repeater!!!
+if [ `/usr/bin/whoami` != "repeater" ] ; then
+  echo This program must be run as user REPEATER!
+  exit 1
+fi
+
+# Make sure we have sourced the environment file
+if [ "$RUN_ENV" != "TRUE" ] ; then
+  echo "You must source the environment file first. Do this by running:"
+  echo ". /home/irlp/custom/environment"
+  exit 1
+fi
+
+if [ "$#" = "0" ] ; then exit 1; fi
+
+#Converts audio to nice congruent audio, without gaps, if there is more
+#than one argument in the script.
+
+if [ -f /usr/bin/sox ] ; then
+  while [ -n "$1" ];do
+    if [ ! -f $AUDIO/$1.ul ] ; then 
+      rm -f $RUN/temp.ul
+      /usr/bin/sox $AUDIO/$1.wav $RUN/temp.ul
+      cat $RUN/temp.ul >> $RUN/wavefile.ul
+    else
+      cat $AUDIO/$1.ul >> $RUN/wavefile.ul
+    fi
+    shift
+  done
+  /usr/bin/sox $RUN/wavefile.ul -s -u $RUN/wavefile.wav
+  WAVFILES="$RUN/wavefile.wav"  
+else
+  while [ -n "$1" ];do
+    WAVFILES="$WAVFILES $AUDIO/$1.wav"
+    shift
+  done
+fi
+
+if [ "$OVERRIDE" = "yes" ] ; then
+  SLEEP="usleep 5000"
+else
+  SLEEP="usleep 500000"
+fi
+echo "OVERRIDE="$OVERRIDE
+echo "SLEEP="$SLEEP
+
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/coscheck
+$BIN/key
+
+$SLEEP
+
+$BIN/play $WAVFILES >/dev/null 2>&1 
+
+$SLEEP
+
+$BIN/forceunkey
+
+rm -f $RUN/temp.ul
+rm -f $RUN/wavefile.ul
+rm -f $RUN/wavefile.wav
+
+exit 0

@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# WB8ODF - Dave Parks (dave@irlp.us)
+#
+# speakip.wb8odf
+#
+#
+#
+# I wrote this program because the repeater/irlp is at a different
+# site with dymanic IP adresses. I need to know the IP address at
+# all times.
+#
+# speakip.wb8odf will go out to my IP address server and find it's
+# new address and give it to me via audio.
+#
+#
+#
+# Ver:		1.0
+#
+# Written:	11/08/2009
+#
+# Last Updated:	02/27/2011
+#
+# By:		Dave Parks
+#
+#
+# NOTICE: You must have "speaktime" installed first.
+#
+#
+#
+# If you do NOT understand any of this please give me a call at
+# nodes 4812/8139 or email me.... dave@irlp.us 
+# 
+#
+#
+
+. /home/irlp/custom/environment
+
+
+######## Edit in your node number in the two forms
+NODE1=`/bin/grep STATIONID $CUSTOM/environment | cut -d"=" -f2 | cut -d"n" -f2`
+
+NODE1="8139"
+
+
+$SCRIPT/wavplay custom/script_activated
+
+
+
+IP=`grep $NODE1 $LOCAL/hosts | cut -d" " -f1 | tr "." "D"`
+
+IP=`echo $IP | sed 's/./\/home\/irlp\/scripts\/wavplay & \; /g'`
+
+IP=`echo $IP | sed 's/ D / \; \/custom\/morsecode\/e /g' | sed 's/..$//g'`
+
+
+
+$BIN/forcekey
+$SCRIPT/wavplay_nice custom/today nodenum $NODE custom/is custom/on
+$IP
+$SCRIPT/wavplay_nice custom/chime
+$BIN/forceunkey
+
+exit 0
